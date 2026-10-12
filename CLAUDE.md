@@ -1,0 +1,38 @@
+# StyleMate: The House of "M"
+AI shopping assistant for clothing shops. Flask + Vue 3, Maira (catalogue answers), Chorus (voice). Due 2026-11-10.
+Status: docs/handoff.md. Architecture: docs/architecture.md. Maira/Chorus API: docs/maira-api.md.
+
+## Working with me (Maisha, intern)
+- Build features end to end without waiting for my OK. Afterwards explain what was built and why, so I can present it and answer questions.
+- Ask first before anything that changes the Maira project (profiles, datasets) or spends on real API calls.
+- Give exact commands with folder. Explain errors before fixes.
+- SOLID/DRY/YAGNI: start simple, abstract on second use. Comment where applied.
+- Conventional Commits, one topic each.
+- Never print `.env` or ask for keys.
+
+## Commands
+- `backend/`: `uv run pytest` | `uv run flask seed` | `uv run flask run --debug` | `uv run flask sync-help` (FAQ + size guide → Maira)
+- `frontend/`: `npm run dev` | `npm run build`
+
+## Rules
+- Prices and delivery charges only from `services/pricing.py`, never the AI or the browser; checkout recalculates server-side.
+- Gigalogy calls only via `clients/`; update `tests/fakes.py` when clients change.
+- Every query filters by `tenant_id` (`current_tenant()`).
+- Services raise `UserInputError` / `ServiceUnavailableError`; no try/except in routes.
+- Run tests/build after changes; add a test per bug fix.
+- No migrations: delete `backend/stylemate.db`, re-seed.
+- Packages only via `uv add` / `npm install`.
+- Keep docs/architecture.md and docs/handoff.md current.
+- Chorus is async and blocks browsers (Flask only).
+- Maira match score: ~42 good, <24 not sold.
+- Customers (`Customer`, session `customer_id`) and owners (`User`, session `user_id`) are separate logins; never mix them.
+- Chat orders: the profile writes an `[ORDER ...]` line; `read_order()` in `services/chat.py` checks it. The AI never places an order itself.
+- After a dataset upload, wait for Maira to read the file before training (`MairaClient.upload_and_train()`).
+- Daily per-visitor limits via `services/limits.py` (hash of IP); limits in `.env`.
+
+## Image preview (`services/preview.py`, live with `gpt-image-2` since Oct 11)
+- Same `/v1/maira/ask` endpoint, with the shop's image profile (`Tenant.maira_image_profile_id`); empty ID hides the feature.
+- The picture is a preview only; options are checked by `services/pricing.py` and never priced from the picture.
+- Pictures arrive in `detail.generated_images`; a failed model still answers 200 with the reason in `detail.response`.
+- Products carry optional `length_inches` and `sleeve`; `pricing.options_for()` fits the option menu to them.
+- Size guide (`services/sizes.py`) and Help page (`services/help.py`: FAQ, contact, messages) are per-shop rows seeded from `cli.py`; sample values, not the shop's own.
