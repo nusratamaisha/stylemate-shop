@@ -1,0 +1,52 @@
+"""Customer accounts: signing up, logging in, and a customer's own order history."""
+
+from ..errors import UserInputError
+from ..extensions import db
+from ..models import Customer, Order, Tenant
+
+MIN_PASSWORD_LENGTH = 8
+
+
+def register(tenant: Tenant, name, email, password, phone="") -> Customer:
+    name, email, phone = str(name or "").strip(), _clean_email(email), str(phone or "").strip()
+    password = str(password or "")
+    if not name:
+        raise UserInputError("Please tell us your name.")
+    if "@" not in email or "." not in email.split("@")[-1]:
+        raise UserInputError("Please enter a valid email address.")
+    if len(password) < MIN_PASSWORD_LENGTH:
+        raise UserInputError(f"Your password needs at least {MIN_PASSWORD_LENGTH} characters.")
+    if _find(tenant, email):
+        raise UserInputError("An account with that email already exists. Please log in.")
+
+    customer = Customer(tenant_id=tenant.id, name=name[:120], email=email[:200], phone=phone[:40])
+    customer.set_password(password)
+    db.session.add(customer)
+    db.session.commit()
+    return customer
+
+
+def authenticate(tenant: Tenant, email, password) -> Customer | None:
+    """The customer if the email and password match, otherwise None."""
+    customer = _find(tenant, _clean_email(email))
+    if customer is None or not customer.check_password(str(password or "")):
+        return None
+    return customer
+
+
+def order_history(customer: Customer) -> list[Order]:
+    """The customer's own orders, newest first."""
+    return db.session.scalars(
+        db.select(Order).where(Order.tenant_id == customer.tenant_id, Order.customer_id == customer.id)
+        .order_by(Order.created_at.desc(), Order.id.desc())
+    ).all()
+
+
+def _find(tenant: Tenant, email: str) -> Customer | None:
+    return db.session.scalar(
+        db.select(Customer).where(Customer.tenant_id == tenant.id, Customer.email == email)
+    )
+
+
+def _clean_email(email) -> str:
+    return str(email or "").strip().lower()
