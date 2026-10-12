@@ -3,7 +3,7 @@
 from flask import Blueprint, current_app, jsonify, request, send_from_directory
 
 from ..clients import ReferenceImage
-from ..services import catalog, help, limits, orders, pricing, sizes
+from ..services import accounts, catalog, help, limits, orders, pricing, sizes, uploads
 from .helpers import current_customer, current_tenant, error, json_body, sender_key, services
 
 bp = Blueprint("shop", __name__, url_prefix="/api")
@@ -126,12 +126,26 @@ def voice():
     return jsonify({"heard": True, "transcript": transcript, **reply.to_dict()})
 
 
+@bp.post("/reference-pictures")
+def upload_reference_picture():
+    """A customer's picture for the tailor. Returns the name to send with the order."""
+    picture = request.files.get("picture")
+    if picture is None:
+        return error("Choose a picture to upload.", 400)
+    content = picture.read()
+    uploads.check_picture(picture.mimetype or "", content)  # before counting, so a wrong file isn't counted
+    limits.use(current_tenant(), "reference_picture", sender_key(), current_app.config["REFERENCE_PICTURES_PER_DAY"],
+               "You've uploaded many pictures today. Please describe it in your notes instead.")
+    name = uploads.save_reference_picture(current_app.config["UPLOADS_DIR"], picture.mimetype, content)
+    return jsonify({"reference_image": name}), 201
+
+
 @bp.post("/orders")
 def create_order():
     body = json_body()
     order = orders.place_order(current_tenant(), body.get("customer"), body.get("items") or [],
-                               account=current_customer())
-    return jsonify(order.to_dict()), 201
+                               account=current_customer(), uploads_dir=current_app.config["UPLOADS_DIR"])
+    return jsonify({**order.to_dict(), "customer_order_number": accounts.order_number(order)}), 201
 
 
 @bp.get("/images/<path:filename>")

@@ -43,7 +43,7 @@ def me():
 @bp.get("/account/orders")
 @customer_required
 def my_orders():
-    return jsonify([order.to_dict() for order in accounts.order_history(g.customer)])
+    return jsonify(accounts.order_history(g.customer))
 
 
 @bp.get("/products/<code>/reviews")

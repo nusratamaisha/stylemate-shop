@@ -11,7 +11,9 @@ from dataclasses import dataclass
 from ..errors import UserInputError
 from ..extensions import db
 from ..models import ChatTurn, Product, Tenant
+from . import pricing
 from .catalog import list_products
+from .sizes import sleeve_word
 
 MAX_QUESTION_LENGTH = 500
 MAX_PRODUCT_CARDS = 3
@@ -19,6 +21,9 @@ MAX_ORDER_QUANTITY = 10
 # The line the Maira profile is told to write when a customer confirms an order, e.g.
 # [ORDER product_id=SR-002; size=S; colour=Dusty Pink; quantity=1]
 ORDER_MARKER = re.compile(r"\[ORDER\b([^\]]*)\]", re.IGNORECASE)
+# The line it writes when a customer describes a piece made for them, e.g.
+# [CUSTOMIZE product_id=SR-002; sleeves=Sleeveless; bust=38; length=36]
+CUSTOMIZE_MARKER = re.compile(r"\[CUSTOMIZE\b([^\]]*)\]", re.IGNORECASE)
 
 
 @dataclass
@@ -41,12 +46,25 @@ class ChatOrder:
 
 
 @dataclass
+class ChatCustomize:
+    """A made-for-you piece the customer described in the chat. The product page finishes it and shows the price."""
+
+    product: Product
+    sleeves: str  # the label of a sleeve option this piece offers, or ""
+    measurements: dict[str, int]  # whichever of bust, waist, hip and length the customer has given
+
+    def to_dict(self) -> dict:
+        return {"product": self.product.to_dict(), "sleeves": self.sleeves, "measurements": self.measurements}
+
+
+@dataclass
 class ChatReply:
     answer: str
     session_id: str
     products: list[Product]
     answered: bool
     order: ChatOrder | None = None  # set when the website should take the customer to checkout
+    customize: ChatCustomize | None = None  # set when the product page should open with their changes filled in
 
     def to_dict(self) -> dict:
         return {
@@ -55,6 +73,7 @@ class ChatReply:
             "products": [product.to_dict() for product in self.products],
             "answered": self.answered,
             "order": self.order.to_dict() if self.order else None,
+            "customize": self.customize.to_dict() if self.customize else None,
         }
 
 
@@ -80,6 +99,7 @@ class ChatService:
         answered = is_answered(result.top_score, self._threshold)
         catalogue = list_products(tenant)
         answer, order = read_order(catalogue, result.text)
+        answer, customize = read_customize(tenant, catalogue, answer)
         products = mentioned_products(catalogue, answer)
 
         db.session.add(ChatTurn(
@@ -95,7 +115,7 @@ class ChatService:
         db.session.commit()
 
         return ChatReply(answer=answer, session_id=result.session_id,
-                         products=products, answered=answered, order=order)
+                         products=products, answered=answered, order=order, customize=customize)
 
 
 def read_order(products: list[Product], answer: str) -> tuple[str, ChatOrder | None]:
@@ -114,6 +134,42 @@ def read_order(products: list[Product], answer: str) -> tuple[str, ChatOrder | N
         return text, _check_order(products, _marker_fields(match.group(1)))
     except UserInputError as problem:
         return f"{text}\n\nI couldn't start that order: {problem} Please choose on the product's page.".strip(), None
+
+
+def read_customize(tenant: Tenant, products: list[Product], answer: str) -> tuple[str, ChatCustomize | None]:
+    """Take the customize marker out of the answer and keep only what the shop can really make.
+
+    No price is worked out here. The product page opens with these choices filled in,
+    and pricing.py prices them there, where the customer can see and change everything.
+    """
+    match = CUSTOMIZE_MARKER.search(answer)
+    if not match:
+        return answer, None
+    text = CUSTOMIZE_MARKER.sub("", answer).strip()
+    fields = _marker_fields(match.group(1))
+    code = fields.get("product_id", "").lower()
+    product = next((item for item in products if item.code.lower() == code), None)
+    if product is None:
+        return text, None
+    if not product.customizable:
+        return f"{text}\n\n{product.name} can't be customized, but you can order it in its standard sizes.".strip(), None
+
+    # A sleeve this piece offers (not one it already has), in the shop's own words
+    wanted = sleeve_word(fields.get("sleeves", ""))
+    offered = [option["label"] for group in pricing.options_for(tenant, product)
+               if group["group"] == pricing.SLEEVE_GROUP for option in group["options"]]
+    sleeves = next((label for label in offered if wanted and sleeve_word(label) == wanted), "")
+
+    measurements = {}
+    for name in [*pricing.REQUIRED_MEASUREMENTS, "length"]:
+        try:  # one unreadable number shouldn't lose the others
+            measurements.update(pricing.clean_measurements({name: fields.get(name) or fields.get(f"{name}_inches")},
+                                                           require_all=False))
+        except UserInputError:
+            pass
+    if not sleeves and not measurements:
+        return text, None
+    return text, ChatCustomize(product=product, sleeves=sleeves, measurements=measurements)
 
 
 def _marker_fields(body: str) -> dict[str, str]:

@@ -15,10 +15,9 @@ from ..clients import ReferenceImage
 from ..errors import UserInputError
 from ..models import Product, Tenant
 from . import pricing
+from .uploads import check_picture
 
 MAX_WISH_LENGTH = 200
-MAX_PHOTO_BYTES = 4 * 1024 * 1024
-PHOTO_TYPES = {"image/jpeg", "image/png", "image/webp"}
 IMAGE_TYPES = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
 
 
@@ -51,7 +50,7 @@ class PreviewService:
             raise UserInputError(f"{product.name} can't be customized.")
         colour = _check_colour(product, colour)
         if photo:
-            _check_photo(photo)
+            check_picture(photo.mimetype, photo.content)
 
         # DRY: pricing.py already checks the options (this shop's, one per group, product is customizable)
         quote = pricing.quote_for(tenant, product, option_ids or [])
@@ -115,12 +114,3 @@ def _check_colour(product: Product, colour: str) -> str:
     if colour not in colours:
         raise UserInputError(f"{product.name} doesn't come in {colour}.")
     return colour
-
-
-def _check_photo(photo: ReferenceImage) -> None:
-    if photo.mimetype not in PHOTO_TYPES:
-        raise UserInputError("Please upload a JPG, PNG or WebP photo.")
-    if not photo.content:
-        raise UserInputError("That photo is empty. Please choose another one.")
-    if len(photo.content) > MAX_PHOTO_BYTES:
-        raise UserInputError("That photo is too large (4 MB maximum).")

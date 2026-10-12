@@ -23,6 +23,8 @@ def settings_from_env() -> dict:
         "CONTACT_MESSAGES_PER_DAY": int(env("CONTACT_MESSAGES_PER_DAY", "5")),  # per visitor; 0 = no limit
         "PREVIEWS_PER_DAY": int(env("PREVIEWS_PER_DAY", "20")),  # each picture costs money
         "IMAGES_DIR": str(DATA_DIR / "images"),
+        "UPLOADS_DIR": str(BACKEND_DIR / "uploads"),  # customers' reference pictures; never committed
+        "REFERENCE_PICTURES_PER_DAY": int(env("REFERENCE_PICTURES_PER_DAY", "20")),
         "MAX_CONTENT_LENGTH": 5 * 1024 * 1024,  # uploads (CSV, voice) up to 5 MB
         "SESSION_COOKIE_SAMESITE": "Lax",
     }

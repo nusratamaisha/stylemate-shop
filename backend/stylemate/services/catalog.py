@@ -94,6 +94,25 @@ def save_products(tenant: Tenant, rows: list[dict]) -> ImportResult:
     return result
 
 
+def products_csv(tenant: Tenant) -> bytes:
+    """The shop's products as they are in the database now, in the same columns as the upload CSV."""
+    columns = ["product_id", "name", "image", "category", "occasion", "sizes", "colours", "fabric",
+               "length_inches", "sleeve", "price_bdt", "stock", "customizable", "description"]
+    out = io.StringIO()
+    writer = csv.DictWriter(out, fieldnames=columns, lineterminator="\n")
+    writer.writeheader()
+    for product in list_products(tenant):
+        writer.writerow({
+            "product_id": product.code, "name": product.name, "image": product.image,
+            "category": product.category, "occasion": product.occasion, "sizes": product.sizes,
+            "colours": product.colours, "fabric": product.fabric,
+            "length_inches": product.length_inches if product.length_inches is not None else "",
+            "sleeve": product.sleeve, "price_bdt": product.price_bdt, "stock": product.stock,
+            "customizable": "yes" if product.customizable else "no", "description": product.description,
+        })
+    return out.getvalue().encode("utf-8")
+
+
 class CatalogImporter:
     """Imports a CSV into the database, then sends the same file to the shop's Maira dataset."""
 
@@ -118,6 +137,15 @@ class CatalogImporter:
         result.assistant_status = "updating"
         result.assistant_message = "Products saved. The assistant is learning the changes; this takes about a minute."
         return result
+
+    def sync_stock(self, tenant: Tenant) -> None:
+        """Send the catalogue as it is now to Maira, so the assistant knows today's stock.
+
+        Orders lower the stock in the database, but Maira only knows what it was last sent.
+        """
+        if not tenant.maira_dataset_id:
+            raise UserInputError("The shop has no Maira dataset ID, so the assistant can't be updated.")
+        self._maira.upload_and_train(tenant.maira_dataset_id, "products.csv", products_csv(tenant))
 
 
 def _clean_row(raw: dict) -> dict:

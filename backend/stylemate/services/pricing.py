@@ -15,6 +15,11 @@ from .sizes import sleeve_lengths, sleeve_word
 # Where an order can be delivered. Each shop sets its own charge for each (on its Tenant row).
 DELIVERY_AREAS = {"inside_dhaka": "Inside Dhaka", "outside_dhaka": "Outside Dhaka"}
 
+# Body measurements for a made-to-measure piece, in inches. Length is optional: left out, it stays as shown.
+REQUIRED_MEASUREMENTS = ["bust", "waist", "hip"]
+MEASUREMENT_RANGE = (20, 72)
+MADE_TO_MEASURE_SIZE = "Made to measure"  # stored where a ready-made piece has S, M or L
+
 SLEEVE_GROUP = "Sleeves"  # the option group that is compared with a product's `sleeve` value
 
 
@@ -25,6 +30,7 @@ class Quote:
     total_bdt: int = 0
     ready_in_days: int | None = None  # None for regular (non-custom) items
     details: str = ""  # for the customer and the tailor, e.g. "Sleeves: Short sleeves; Length: Shorter by 2 inches (50 in)"
+    needs_measurements: bool = False  # made to measure: the order takes measurements, not a size
 
     @property
     def is_custom(self) -> bool:
@@ -37,6 +43,7 @@ class Quote:
             "total_bdt": self.total_bdt,
             "ready_in_days": self.ready_in_days,
             "is_custom": self.is_custom,
+            "needs_measurements": self.needs_measurements,
             "details": self.details,
         }
 
@@ -53,12 +60,16 @@ def calculate_quote(product: Product, options: list[CustomizationOption], base_d
     for option in options:
         if already_has(product, option):
             raise UserInputError(f"{product.name} already has {option.label.lower()}.")
+    measured = any(option.needs_measurements for option in options)
+    if measured and any(option.length_change_inches for option in options):
+        # A made-to-measure piece is cut to the exact length the customer gives
+        raise UserInputError("With made to measure, give your exact length in your measurements instead of a length change.")
 
     total = product.price_bdt + sum(option.extra_price_bdt for option in options)
     days = base_days + sum(option.extra_days for option in options) if options else None
     details = "; ".join(_describe(product, option) for option in options)
     return Quote(base_price_bdt=product.price_bdt, extras=list(options),
-                 total_bdt=total, ready_in_days=days, details=details)
+                 total_bdt=total, ready_in_days=days, details=details, needs_measurements=measured)
 
 
 def already_has(product: Product, option: CustomizationOption) -> bool:
@@ -160,3 +171,33 @@ def shipping_charge(tenant: Tenant, area) -> int:
         if option["area"] == area:
             return option["charge_bdt"]
     raise UserInputError("Please choose whether we deliver inside or outside Dhaka.")
+
+
+def clean_measurements(measurements, *, require_all: bool = True) -> dict[str, int]:
+    """Check the measurements for a made-to-measure piece. Returns whole inches, e.g. {"bust": 38, "waist": 32}.
+
+    With require_all=False, missing ones are simply left out (used when the stylist chat
+    passes on what the customer has said so far).
+    """
+    measurements = measurements if isinstance(measurements, dict) else {}
+    low, high = MEASUREMENT_RANGE
+    clean = {}
+    for name in [*REQUIRED_MEASUREMENTS, "length"]:
+        value = measurements.get(name)
+        if value in (None, ""):
+            if require_all and name in REQUIRED_MEASUREMENTS:
+                raise UserInputError(f"Please give your {name} measurement in inches.")
+            continue
+        try:
+            inches = round(float(value))
+        except (TypeError, ValueError):
+            raise UserInputError(f"Your {name} measurement must be a number of inches.") from None
+        if not low <= inches <= high:
+            raise UserInputError(f"Your {name} measurement should be between {low} and {high} inches.")
+        clean[name] = inches
+    return clean
+
+
+def measurements_text(measurements: dict[str, int]) -> str:
+    """For the tailor: "bust 38 in, waist 32 in, hip 40 in, length 36 in"."""
+    return ", ".join(f"{name} {inches} in" for name, inches in measurements.items())

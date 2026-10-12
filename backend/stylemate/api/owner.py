@@ -1,6 +1,6 @@
 """Routes for the shop owner's dashboard. All except login need a logged-in owner."""
 
-from flask import Blueprint, g, jsonify, request, session
+from flask import Blueprint, current_app, g, jsonify, request, send_from_directory, session
 
 from ..extensions import db
 from ..models import User
@@ -40,6 +40,12 @@ def owner_insights():
     return jsonify(insights.owner_insights(g.tenant))
 
 
+@bp.get("/orders")
+@owner_required
+def all_orders():
+    return jsonify({"summary": orders.sales_summary(g.tenant), "orders": orders.all_orders(g.tenant)})
+
+
 @bp.get("/custom-orders")
 @owner_required
 def custom_orders():
@@ -50,8 +56,16 @@ def custom_orders():
 @bp.patch("/custom-orders/<int:item_id>")
 @owner_required
 def update_custom_order(item_id: int):
-    item = orders.update_custom_order_status(g.tenant, item_id, str(json_body().get("status") or ""))
+    item = orders.update_item_status(g.tenant, item_id, str(json_body().get("status") or ""))
     return jsonify(item.to_dict())
+
+
+@bp.get("/custom-orders/<int:item_id>/reference-picture")
+@owner_required
+def reference_picture(item_id: int):
+    """The customer's picture for the tailor. Only the owner of that order's shop can open it."""
+    name = orders.reference_picture_name(g.tenant, item_id)
+    return send_from_directory(current_app.config["UPLOADS_DIR"], name)
 
 
 @bp.get("/messages")
@@ -64,6 +78,14 @@ def customer_messages():
 @owner_required
 def products():
     return jsonify([product.to_dict() for product in catalog.list_products(g.tenant)])
+
+
+@bp.post("/products/sync")
+@owner_required
+def sync_products():
+    """Tell the assistant today's stock (orders change it in the database, not in Maira)."""
+    services().catalog_importer.sync_stock(g.tenant)
+    return jsonify({"message": "The assistant is learning today's stock; this takes about a minute."})
 
 
 @bp.post("/products/upload")

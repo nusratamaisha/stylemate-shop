@@ -134,7 +134,10 @@ class Product(db.Model):
 
 
 class CustomizationOption(db.Model):
-    """One change a customer can order, e.g. group "Sleeves", label "Short sleeves", +৳150.
+    """One change a customer can order, e.g. group "Sleeves", label "Full sleeves", +৳200.
+
+    extra_price_bdt can be negative: a change that uses less fabric (short sleeves,
+    a shorter length) makes the piece cheaper.
 
     Options are rows, not code: a shop adds a new option by adding a row.
     """
@@ -146,6 +149,7 @@ class CustomizationOption(db.Model):
     extra_price_bdt: Mapped[int] = mapped_column(default=0)
     extra_days: Mapped[int] = mapped_column(default=0)
     length_change_inches: Mapped[int] = mapped_column(default=0)  # -2 for "Shorter by 2 inches"
+    needs_measurements: Mapped[bool] = mapped_column(default=False)  # made to measure: no S/M/L, measurements instead
     position: Mapped[int] = mapped_column(default=0)
 
     def to_dict(self) -> dict:
@@ -155,6 +159,7 @@ class CustomizationOption(db.Model):
             "label": self.label,
             "extra_price_bdt": self.extra_price_bdt,
             "extra_days": self.extra_days,
+            "needs_measurements": self.needs_measurements,
         }
 
 
@@ -300,6 +305,7 @@ class OrderItem(db.Model):
     is_custom: Mapped[bool] = mapped_column(default=False)
     custom_details: Mapped[str] = mapped_column(Text, default="")  # "Sleeves: Short sleeves; Length: ..."
     notes: Mapped[str] = mapped_column(Text, default="")
+    reference_image: Mapped[str] = mapped_column(String(60), default="")  # the customer's picture for the tailor
     ready_by: Mapped[date | None]
     status: Mapped[str] = mapped_column(String(20), default="new")
 
@@ -319,6 +325,7 @@ class OrderItem(db.Model):
             "is_custom": self.is_custom,
             "custom_details": self.custom_details,
             "notes": self.notes,
+            "has_reference_image": bool(self.reference_image),
             "ready_by": self.ready_by.isoformat() if self.ready_by else None,
             "status": self.status,
             "customer_name": self.order.customer_name,

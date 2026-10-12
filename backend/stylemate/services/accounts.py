@@ -34,12 +34,27 @@ def authenticate(tenant: Tenant, email, password) -> Customer | None:
     return customer
 
 
-def order_history(customer: Customer) -> list[Order]:
-    """The customer's own orders, newest first."""
-    return db.session.scalars(
+def order_history(customer: Customer) -> list[dict]:
+    """The customer's own orders, newest first, each with the customer's own order number."""
+    orders = db.session.scalars(
         db.select(Order).where(Order.tenant_id == customer.tenant_id, Order.customer_id == customer.id)
-        .order_by(Order.created_at.desc(), Order.id.desc())
+        .order_by(Order.id)
     ).all()
+    numbered = [{**order.to_dict(), "customer_order_number": number} for number, order in enumerate(orders, start=1)]
+    return numbered[::-1]
+
+
+def order_number(order: Order) -> int | None:
+    """Which of the customer's orders this is: their first is 1, their second 2. None for a guest order.
+
+    Every customer counts from 1. The shop-wide ID (order.id) stays as the reference the owner
+    uses, because "order 2" alone would mean a different order for every customer.
+    """
+    if order.customer_id is None:
+        return None
+    return db.session.scalar(
+        db.select(db.func.count(Order.id)).where(Order.customer_id == order.customer_id, Order.id <= order.id)
+    )
 
 
 def _find(tenant: Tenant, email: str) -> Customer | None:

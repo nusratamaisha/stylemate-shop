@@ -53,15 +53,16 @@ DEFAULT_FAQ = [
      "send us a message from this page."),
 ]
 
-# (group, label, extra price in taka, extra days, change to the length in inches)
+# (group, label, change to the price in taka, extra days, change to the length in inches, needs measurements)
+# A change that uses less fabric lowers the price (a negative number); one that uses more raises it.
 DEFAULT_OPTIONS = [
-    ("Sleeves", "Short sleeves", 150, 2, 0),
-    ("Sleeves", "Full sleeves", 200, 2, 0),
-    ("Sleeves", "Sleeveless", 100, 1, 0),
-    ("Length", "Shorter by 2 inches", 100, 1, -2),
-    ("Length", "Longer by 2 inches", 250, 2, 2),
-    ("Lining", "Add full cotton lining", 300, 2, 0),
-    ("Fit", "Made to your measurements", 600, 3, 0),
+    ("Sleeves", "Short sleeves", -100, 2, 0, False),
+    ("Sleeves", "Full sleeves", 200, 2, 0, False),
+    ("Sleeves", "Sleeveless", -150, 1, 0, False),
+    ("Length", "Shorter by 2 inches", -100, 1, -2, False),
+    ("Length", "Longer by 2 inches", 250, 2, 2, False),
+    ("Lining", "Add full cotton lining", 300, 2, 0, False),
+    ("Fit", "Made to your measurements", 600, 3, 0, True),
 ]
 
 # (size, bust, waist, hip): the body each size is cut for, in inches
@@ -155,10 +156,10 @@ def _add_default_options(tenant: Tenant) -> None:
     exists = db.session.scalar(db.select(CustomizationOption).where(CustomizationOption.tenant_id == tenant.id))
     if exists:
         return
-    for position, (group, label, price, days, length_change) in enumerate(DEFAULT_OPTIONS):
+    for position, (group, label, price, days, length_change, measured) in enumerate(DEFAULT_OPTIONS):
         db.session.add(CustomizationOption(tenant_id=tenant.id, group=group, label=label,
-                                           extra_price_bdt=price, extra_days=days,
-                                           length_change_inches=length_change, position=position))
+                                           extra_price_bdt=price, extra_days=days, length_change_inches=length_change,
+                                           needs_measurements=measured, position=position))
     db.session.commit()
     click.echo(f"Customization options: {len(DEFAULT_OPTIONS)} added.")
 
