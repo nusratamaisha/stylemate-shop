@@ -26,6 +26,8 @@ Status: docs/handoff.md. Architecture: docs/architecture.md. Maira/Chorus API: d
 - Chorus is async and blocks browsers (Flask only).
 - Maira match score: ~42 good, <24 not sold.
 - Customers (`Customer`, session `customer_id`) and owners (`User`, session `user_id`) are separate logins; never mix them.
+- Made to measure (`needs_measurements` option): no size, measurements checked by `pricing.clean_measurements()`.
+- Ready-made orders lower `Product.stock` (`orders._take_from_stock()`); a CSV upload overwrites stock with the file's numbers.
 - Chat orders: the profile writes an `[ORDER ...]` line; `read_order()` in `services/chat.py` checks it. The AI never places an order itself.
 - After a dataset upload, wait for Maira to read the file before training (`MairaClient.upload_and_train()`).
 - Daily per-visitor limits via `services/limits.py` (hash of IP); limits in `.env`.

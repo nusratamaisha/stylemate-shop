@@ -8,8 +8,9 @@ venv/
 .venv/
 .pytest_cache/
 
-# Local database
+# Local database and customers' uploaded pictures
 *.db
+backend/uploads/
 
 # Vue / Node
 node_modules/
