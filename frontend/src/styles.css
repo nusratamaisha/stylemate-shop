@@ -1,0 +1,217 @@
+/* The House of "M": design tokens and base styles.
+   Colours are taken from the clothes themselves: sindoor maroon, block-print indigo,
+   haldi mustard, on a clean white page so the products carry the colour. */
+
+:root {
+  --sindoor: #7a1f2b;
+  --sindoor-deep: #5c1520;
+  --sindoor-wash: #f7eced;
+  --indigo: #26396b;
+  --indigo-wash: #eceff6;
+  --haldi: #c98f12;
+  --paper: #fdfbf9; /* a warm off-white, softer than pure white next to the photos */
+  --jamdani: #f5efec;
+  --line: #e7dcd9;
+  --kohl: #2b2024;
+  --muted: #6c5f63;
+  --ok: #2d6a4f;
+  --danger: #a3242c;
+
+  --font-display: 'Bodoni Moda', Didot, 'Bodoni 72', Georgia, serif;
+  --font-body: 'Hind Siliguri', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --step--1: 0.875rem;
+  --step-0: 1rem;
+  --step-1: 1.25rem;
+  --step-2: 1.625rem;
+  --step-3: 2.125rem;
+  --step-4: 3rem;
+
+  --radius: 10px;
+  --radius-large: 18px;
+  --shadow: 0 10px 30px -12px rgba(43, 32, 36, 0.22);
+  --ease: 180ms ease;
+  --gutter: clamp(16px, 4vw, 40px);
+  --max: 1180px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--kohl);
+  font-family: var(--font-body);
+  font-size: var(--step-0);
+  line-height: 1.6;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 500;
+  line-height: 1.15;
+  margin: 0 0 0.5em;
+  letter-spacing: -0.01em;
+}
+
+h1 { font-size: var(--step-4); }
+h2 { font-size: var(--step-3); }
+
+/* A small label above a heading, e.g. "NEW IN" */
+.eyebrow {
+  display: block;
+  margin-bottom: 10px;
+  font: 600 0.75rem / 1 var(--font-body);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--sindoor);
+}
+h3 { font-size: var(--step-1); font-family: var(--font-body); font-weight: 600; letter-spacing: 0; }
+
+p { margin: 0 0 1em; max-width: 68ch; }
+
+a { color: var(--indigo); text-underline-offset: 3px; }
+a:hover { color: var(--sindoor); }
+
+img { max-width: 100%; display: block; }
+
+:focus-visible {
+  outline: 2px solid var(--indigo);
+  outline-offset: 2px;
+}
+
+.page {
+  width: 100%;
+  max-width: var(--max);
+  margin: 0 auto;
+  padding: 0 var(--gutter);
+}
+
+.muted { color: var(--muted); }
+.small { font-size: var(--step--1); }
+
+/* Buttons */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 46px;
+  padding: 0 22px;
+  border: 1px solid var(--sindoor);
+  border-radius: 999px;
+  background: var(--sindoor);
+  color: #fff;
+  font: 600 var(--step-0) / 1 var(--font-body);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background var(--ease), color var(--ease), transform var(--ease), box-shadow var(--ease);
+}
+.button:hover { background: var(--sindoor-deep); color: #fff; transform: translateY(-1px); box-shadow: var(--shadow); }
+.button:active { transform: none; box-shadow: none; }
+.button:disabled { opacity: 0.55; cursor: not-allowed; transform: none; box-shadow: none; }
+.button.secondary { background: transparent; color: var(--sindoor); }
+.button.secondary:hover { background: var(--sindoor-wash); color: var(--sindoor-deep); box-shadow: none; }
+.button.small { min-height: 36px; padding: 0 14px; font-size: var(--step--1); }
+
+.text-button {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--indigo);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+/* Forms */
+label { display: block; font-weight: 500; margin-bottom: 6px; }
+input,
+textarea,
+select {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+  color: var(--kohl);
+  font: inherit;
+  transition: border-color var(--ease), box-shadow var(--ease);
+}
+/* The browser's grey "Choose File" button, restyled to match the shop */
+input[type='file'] { padding: 8px; cursor: pointer; }
+input[type='file']::file-selector-button {
+  margin-right: 12px;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--jamdani);
+  color: var(--kohl);
+  font: 500 var(--step--1) / 1 var(--font-body);
+  cursor: pointer;
+}
+input[type='file']::file-selector-button:hover { background: var(--sindoor-wash); color: var(--sindoor-deep); }
+input:focus,
+textarea:focus,
+select:focus { border-color: var(--indigo); outline: none; box-shadow: 0 0 0 3px var(--indigo-wash); }
+.field { margin-bottom: 16px; }
+
+/* Choice pills: sizes, options, filters */
+.pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.pill {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--kohl);
+  font: 500 var(--step--1) / 1 var(--font-body);
+  cursor: pointer;
+  transition: background var(--ease), border-color var(--ease), color var(--ease);
+}
+.pill:hover { border-color: var(--kohl); }
+.pill[aria-pressed='true'] { background: var(--kohl); border-color: var(--kohl); color: #fff; }
+.pill:disabled { color: #b8adb0; text-decoration: line-through; cursor: not-allowed; }
+
+.message { padding: 12px 14px; border-radius: var(--radius); margin: 12px 0; }
+.message.error { background: #fbeceb; color: var(--danger); }
+.message.ok { background: #e9f3ee; color: var(--ok); }
+
+.tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.tag.custom { background: #fbf2dc; color: #7a5507; }
+.tag.out { background: #f1eceb; color: var(--muted); }
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+
+@media (max-width: 640px) {
+  h1 { font-size: 2.25rem; }
+  h2 { font-size: 1.75rem; }
+}
