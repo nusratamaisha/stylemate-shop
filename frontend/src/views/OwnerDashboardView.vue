@@ -7,10 +7,11 @@ import { plainText } from '../utils/markdown.js'
 
 const router = useRouter()
 const owner = ref(null)
-const tab = ref('questions')
+const tab = ref('sales')
 
 const insights = ref(null)
 const orders = ref([])
+const sales = ref(null) // { summary, orders }: every order, ready-made and made to order
 const orderFilter = ref('')
 const products = ref([])
 const messages = ref([])
@@ -20,8 +21,11 @@ const upload = ref(null)
 const uploading = ref(false)
 const uploadResult = ref(null)
 const uploadError = ref('')
+const syncing = ref(false)
+const syncMessage = ref('')
 
 const STATUS_LABELS = { new: 'New', in_production: 'In production', shipped: 'Shipped' }
+const AREA_LABELS = { inside_dhaka: 'Inside Dhaka', outside_dhaka: 'Outside Dhaka' }
 
 async function load(fn) {
   error.value = ''
@@ -35,6 +39,7 @@ async function load(fn) {
 
 const loaders = {
   questions: async () => (insights.value = await api('/owner/insights')),
+  sales: async () => (sales.value = await api('/owner/orders')),
   orders: async () => (orders.value = await api(`/owner/custom-orders${orderFilter.value ? `?status=${orderFilter.value}` : ''}`)),
   products: async () => (products.value = await api('/owner/products')),
   messages: async () => (messages.value = await api('/owner/messages')),
@@ -51,6 +56,7 @@ async function setStatus(item, status) {
   await load(async () => {
     const updated = await api(`/owner/custom-orders/${item.id}`, { method: 'PATCH', body: { status } })
     Object.assign(item, updated)
+    if (tab.value === 'sales') sales.value.summary = (await api('/owner/orders')).summary // "to ship" changes
   })
 }
 
@@ -76,6 +82,15 @@ async function uploadCsv() {
   }
 }
 
+async function syncStock() {
+  syncing.value = true
+  syncMessage.value = ''
+  await load(async () => {
+    syncMessage.value = (await api('/owner/products/sync', { method: 'POST' })).message
+  })
+  syncing.value = false
+}
+
 async function logOut() {
   await api('/owner/logout', { method: 'POST' }).catch(() => {})
   router.push('/owner/login')
@@ -93,13 +108,78 @@ async function logOut() {
     </div>
 
     <div class="tabs" role="tablist">
-      <button v-for="[key, label] in [['questions', 'Customer questions'], ['orders', 'Custom orders'], ['products', 'Products'], ['messages', 'Messages']]"
+      <button v-for="[key, label] in [['sales', 'Orders'], ['questions', 'Customer questions'], ['orders', 'Custom orders'], ['products', 'Products'], ['messages', 'Messages']]"
         :key="key" role="tab" type="button" class="tab" :aria-selected="tab === key" @click="tab = key">
         {{ label }}
       </button>
     </div>
 
     <p v-if="error" class="message error">{{ error }}</p>
+
+    <!-- Every order, with the sales numbers -->
+    <section v-if="tab === 'sales' && sales" class="panel">
+      <div class="stats four">
+        <div class="stat"><span class="stat-value">{{ sales.summary.order_count }}</span><span>orders</span></div>
+        <div class="stat">
+          <span class="stat-value">{{ formatTaka(sales.summary.sales_bdt) }}</span>
+          <span>sales, plus {{ formatTaka(sales.summary.delivery_bdt) }} delivery collected</span>
+        </div>
+        <div class="stat">
+          <span class="stat-value">{{ sales.summary.pieces_sold }}</span>
+          <span>pieces sold, {{ sales.summary.custom_pieces }} made to order</span>
+        </div>
+        <div class="stat"><span class="stat-value">{{ sales.summary.to_ship }}</span><span>lines still to ship</span></div>
+      </div>
+
+      <div v-if="sales.summary.best_sellers.length" class="best">
+        <h2 class="section-title">Best sellers</h2>
+        <ol class="ranked">
+          <li v-for="item in sales.summary.best_sellers" :key="item.name">
+            <span>{{ item.name }}</span><span class="times">{{ item.quantity }} sold</span>
+          </li>
+        </ol>
+      </div>
+
+      <h2 class="section-title">All orders</h2>
+      <p v-if="!sales.orders.length" class="muted">No orders yet.</p>
+      <article v-for="order in sales.orders" :key="order.order_id" class="order-card">
+        <header class="order-head">
+          <strong>Order #{{ order.order_id }}</strong>
+          <span class="muted small">{{ formatDate(order.ordered_at) }}</span>
+          <span class="order-total">{{ formatTaka(order.total_bdt) }}</span>
+        </header>
+        <p class="small order-who">
+          {{ order.customer_name }} · {{ order.phone }}<span v-if="order.has_account" class="tag custom">Has an account</span><br />
+          <span class="muted">{{ order.address }} · {{ AREA_LABELS[order.delivery_area] || 'Area not given' }}
+            ({{ formatTaka(order.shipping_bdt) }} delivery)</span>
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Piece</th><th>Type</th><th>Qty</th><th>Price</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr v-for="item in order.items" :key="item.id">
+                <td>
+                  {{ item.product_name }}<br />
+                  <span class="small muted">{{ item.is_custom && item.size === 'Made to measure' ? item.size : `Size ${item.size}` }}, {{ item.colour }}</span>
+                  <span v-if="item.custom_details" class="small"><br />{{ item.custom_details }}</span>
+                </td>
+                <td>
+                  <span class="tag" :class="item.is_custom ? 'custom' : 'out'">{{ item.is_custom ? 'Made to order' : 'Ready-made' }}</span>
+                </td>
+                <td>{{ item.quantity }}</td>
+                <td>{{ formatTaka(item.unit_price_bdt * item.quantity) }}</td>
+                <td>
+                  <label class="visually-hidden" :for="`line-status-${item.id}`">Status</label>
+                  <select :id="`line-status-${item.id}`" :value="item.status" @change="setStatus(item, $event.target.value)">
+                    <option v-for="(label, key) in STATUS_LABELS" :key="key" :value="key">{{ label }}</option>
+                  </select>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </section>
 
     <!-- Customer questions -->
     <section v-if="tab === 'questions' && insights" class="panel">
@@ -168,7 +248,14 @@ async function logOut() {
               <td>{{ item.order_id }}<br /><span class="small muted">{{ formatDate(item.ordered_at) }}</span></td>
               <td>{{ item.customer_name }}<br /><span class="small muted">{{ item.phone }}</span></td>
               <td>{{ item.product_name }}<br /><span class="small muted">{{ item.size }}, {{ item.colour }} × {{ item.quantity }}</span></td>
-              <td>{{ item.custom_details }}<br /><span v-if="item.notes" class="small muted">{{ item.notes }}</span></td>
+              <td>
+                {{ item.custom_details }}<br /><span v-if="item.notes" class="small muted">{{ item.notes }}</span>
+                <a v-if="item.has_reference_image" :href="`/api/owner/custom-orders/${item.id}/reference-picture`"
+                  target="_blank" rel="noopener" class="picture-link small">
+                  <img :src="`/api/owner/custom-orders/${item.id}/reference-picture`" alt="" />
+                  Customer’s reference picture
+                </a>
+              </td>
               <td>{{ formatTaka(item.unit_price_bdt * item.quantity) }}</td>
               <td>{{ formatDate(item.ready_by) }}</td>
               <td>
@@ -202,6 +289,17 @@ async function logOut() {
           {{ uploadResult.created }} added, {{ uploadResult.updated }} updated. {{ uploadResult.assistant_message }}
         </div>
       </form>
+
+      <div class="sync">
+        <p class="small muted">
+          Orders lower the stock here straight away. The stylist chat only knows the stock it was last sent,
+          so send it today’s numbers after a busy day or when something sells out.
+        </p>
+        <button type="button" class="button secondary small" :disabled="syncing" @click="syncStock">
+          {{ syncing ? 'Sending…' : 'Send today’s stock to the stylist' }}
+        </button>
+        <p v-if="syncMessage" class="message ok" role="status">{{ syncMessage }}</p>
+      </div>
 
       <div class="table-wrap">
         <table>
@@ -242,6 +340,57 @@ async function logOut() {
 </template>
 
 <style scoped>
+.sync {
+  margin: 20px 0;
+}
+.stats.four {
+  grid-template-columns: repeat(4, 1fr);
+}
+.best {
+  max-width: 520px;
+  margin-bottom: 32px;
+}
+.order-card {
+  padding: 18px 20px;
+  margin-bottom: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-large);
+  background: #fff;
+}
+.order-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.order-total {
+  margin-left: auto;
+  font-weight: 600;
+  font-size: var(--step-1);
+}
+.order-who {
+  margin: 6px 0 10px;
+  max-width: none;
+}
+.order-who .tag {
+  margin-left: 8px;
+}
+@media (max-width: 800px) {
+  .stats.four {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+.picture-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+.picture-link img {
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: 6px;
+}
 .message-text {
   white-space: pre-wrap;
   min-width: 260px;

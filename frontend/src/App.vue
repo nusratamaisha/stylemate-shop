@@ -64,8 +64,7 @@ const firstName = computed(() => {
       </p>
       <p v-if="!isOwnerPage" class="small muted">
         Our stylist answers only from this shop’s catalogue, so it won’t guess.<br />
-        <RouterLink to="/help">FAQ and contact</RouterLink> · <RouterLink to="/size-guide">Size guide</RouterLink> ·
-        <RouterLink to="/owner/login">Shop owner login</RouterLink>
+        <RouterLink to="/help">FAQ and contact</RouterLink> · <RouterLink to="/size-guide">Size guide</RouterLink>
       </p>
     </div>
   </footer>

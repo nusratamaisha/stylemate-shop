@@ -8,7 +8,7 @@ const state = reactive({ items: loadJSON(STORAGE_KEY, []) })
 watch(() => state.items, (items) => saveJSON(STORAGE_KEY, items), { deep: true })
 
 function lineKey(item) {
-  return [item.product_code, item.size, item.colour, [...(item.option_ids || [])].sort().join('+'), item.notes || ''].join('|')
+  return [item.product_code, item.size, item.colour, [...(item.option_ids || [])].sort().join('+'), item.notes || '', JSON.stringify(item.measurements || ''), item.reference_image || ''].join('|')
 }
 
 export function useBag() {

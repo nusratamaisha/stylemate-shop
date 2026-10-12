@@ -22,6 +22,16 @@ const router = useRouter()
 
 // The customer confirmed an order in the chat and Flask checked it. The answer shows a
 // "Go to checkout" link; pressing it puts the piece in the bag and opens the checkout page.
+// The customer described a made-for-them piece in the chat. Open its page with those
+// choices filled in; the price and the rest of the measurements are settled there.
+function goToCustomize(message) {
+  const { product, sleeves, measurements } = message.customize
+  chat.state.open = false
+  router.push({ path: `/products/${product.code}`, query: { ...(sleeves ? { sleeves } : {}), ...measurements } })
+}
+const describeCustomize = ({ sleeves, measurements }) =>
+  [sleeves, ...Object.entries(measurements).map(([name, inches]) => `${name} ${inches} in`)].filter(Boolean).join(' · ')
+
 function goToCheckout(message) {
   const order = message.order
   if (!message.inBag) {
@@ -168,6 +178,14 @@ watch(
                 {{ message.inBag ? 'Back to checkout' : 'Go to checkout' }}
               </button>
               <p class="order-note">You’ll add your name, phone and address there.</p>
+            </div>
+            <div v-else-if="message.customize" class="order">
+              <p class="order-summary">
+                <strong>{{ message.customize.product.name }}</strong>, made for you<br />
+                {{ describeCustomize(message.customize) }}
+              </p>
+              <button type="button" class="button small" @click="goToCustomize(message)">See the price and finish</button>
+              <p class="order-note">Your choices will be filled in on the product page.</p>
             </div>
             <div v-else-if="message.products?.length" class="cards">
               <RouterLink

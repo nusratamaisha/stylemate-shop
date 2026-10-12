@@ -19,7 +19,7 @@ const product = ref(null)
 const loadError = ref('')
 const colour = ref('')
 const size = ref('')
-const custom = ref({ quote: null, optionIds: [], notes: '' })
+const custom = ref({ quote: null, optionIds: [], notes: '', referenceImage: '', madeToMeasure: false, measurements: null, measurementsComplete: true, measurementsText: '' })
 const added = ref(false)
 const sizeGuideDialog = ref(null)
 const sizeGuideOpened = ref(false) // load the guide only when someone asks for it
@@ -31,7 +31,7 @@ async function load() {
     product.value = await api(`/products/${encodeURIComponent(props.code)}`)
     colour.value = product.value.colours[0] || ''
     size.value = ''
-    custom.value = { quote: null, optionIds: [], notes: '' }
+    custom.value = { quote: null, optionIds: [], notes: '', referenceImage: '', madeToMeasure: false, measurements: null, measurementsComplete: true, measurementsText: '' }
   } catch (error) {
     loadError.value = error.message
   }
@@ -46,13 +46,18 @@ const stockText = computed(() => {
   if (stock <= 5) return `Only ${stock} left`
   return 'In stock'
 })
+// A made-to-measure piece is cut to the customer's measurements, so it has no S, M or L
+const madeToMeasure = computed(() => isCustom.value && custom.value.madeToMeasure)
 const canAdd = computed(() => {
-  if (!product.value || !size.value || !colour.value) return false
+  if (!product.value || !colour.value) return false
+  if (madeToMeasure.value) return Boolean(custom.value.quote) && custom.value.measurementsComplete
+  if (!size.value) return false
   if (isCustom.value) return Boolean(custom.value.quote)
   return product.value.in_stock
 })
 const buttonText = computed(() => {
-  if (!size.value) return 'Choose a size'
+  if (madeToMeasure.value && !custom.value.measurementsComplete) return 'Enter your measurements'
+  if (!madeToMeasure.value && !size.value) return 'Choose a size'
   if (!isCustom.value && !product.value?.in_stock) return 'Out of stock'
   return isCustom.value ? `Add custom piece to bag (${formatTaka(price.value)})` : 'Add to bag'
 })
@@ -64,12 +69,17 @@ function addToBag() {
     name: product.value.name,
     image_url: product.value.image_url,
     colours: product.value.colours,
-    size: size.value,
+    size: madeToMeasure.value ? 'Made to measure' : size.value,
     colour: colour.value,
     quantity: 1,
     option_ids: custom.value.optionIds,
-    custom_details: isCustom.value ? custom.value.quote.details : '',
+    measurements: madeToMeasure.value ? custom.value.measurements : null,
+    // Shown in the bag. The server writes its own copy when the order is placed.
+    custom_details: isCustom.value
+      ? [custom.value.quote.details, madeToMeasure.value ? `Measurements: ${custom.value.measurementsText}` : ''].filter(Boolean).join('; ')
+      : '',
     notes: isCustom.value ? custom.value.notes : '',
+    reference_image: isCustom.value ? custom.value.referenceImage : '',
     unit_price_bdt: price.value,
   })
   added.value = true
@@ -125,7 +135,10 @@ function askAbout() {
           </div>
         </fieldset>
 
-        <fieldset class="choice">
+        <p v-if="madeToMeasure" class="measured-note">
+          <strong>Size:</strong> made to your measurements. No need to choose S, M or L.
+        </p>
+        <fieldset v-else class="choice">
           <legend>
             Size
             <button type="button" class="text-button guide-link" @click="openSizeGuide">Size guide</button>
@@ -146,7 +159,7 @@ function askAbout() {
 
         <p class="stock" :class="{ out: !product.in_stock }">{{ stockText }}</p>
 
-        <CustomizePanel v-if="product.customizable" :key="product.code" :product="product" @change="custom = $event" />
+        <CustomizePanel v-if="product.customizable" :key="product.code + JSON.stringify($route.query)" :product="product" @change="custom = $event" @use-size="size = $event" />
         <PreviewPanel v-if="product.preview_available" :product="product" :colour="colour" :option-ids="custom.optionIds" />
 
         <div class="buy">
@@ -226,6 +239,11 @@ legend {
   font-weight: 600;
   margin-bottom: 10px;
   padding: 0;
+}
+.measured-note {
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  background: var(--jamdani);
 }
 .guide-link {
   margin-left: 12px;

@@ -15,7 +15,7 @@ const state = reactive({
 function addStylistReply(reply) {
   state.sessionId = reply.session_id || state.sessionId
   // order: a piece the customer confirmed in chat and Flask checked; the widget shows a checkout link for it
-  state.messages.push({ role: 'stylist', text: reply.answer, products: reply.products || [], order: reply.order || null })
+  state.messages.push({ role: 'stylist', text: reply.answer, products: reply.products || [], order: reply.order || null, customize: reply.customize || null })
 }
 
 export function useChat() {

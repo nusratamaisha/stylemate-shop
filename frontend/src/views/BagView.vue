@@ -4,7 +4,7 @@ import { api } from '../api.js'
 import ProductImage from '../components/ProductImage.vue'
 import { useAccount } from '../stores/account.js'
 import { useBag } from '../stores/bag.js'
-import { useShop } from '../stores/shop.js'
+import { refreshProducts, useShop } from '../stores/shop.js'
 import { formatDate, formatTaka } from '../utils/format.js'
 
 const bag = useBag()
@@ -36,11 +36,12 @@ async function placeOrder() {
       body: {
         customer,
         // Prices are not sent: the server works them out again.
-        items: bag.items.value.map(({ product_code, size, colour, quantity, option_ids, notes }) =>
-          ({ product_code, size, colour, quantity, option_ids, notes })),
+        items: bag.items.value.map(({ product_code, size, colour, quantity, option_ids, notes, measurements, reference_image }) =>
+          ({ product_code, size, colour, quantity, option_ids, notes, measurements, reference_image })),
       },
     })
     bag.clear()
+    refreshProducts() // the order lowered the stock, so the shop pages should show the new numbers
   } catch (err) {
     error.value = err.message
   } finally {
@@ -56,7 +57,9 @@ async function placeOrder() {
     <section v-if="confirmation" class="confirmation" role="status">
       <h2>Thank you, {{ customer.name }}</h2>
       <p>
-        Order number {{ confirmation.order_id }} is placed. Total {{ formatTaka(confirmation.total_bdt) }}
+        <template v-if="confirmation.customer_order_number">Your order {{ confirmation.customer_order_number }} (ref #{{ confirmation.order_id }})</template>
+        <template v-else>Order ref #{{ confirmation.order_id }}</template>
+        is placed. Total {{ formatTaka(confirmation.total_bdt) }}
         (including {{ formatTaka(confirmation.shipping_bdt) }} delivery), paid on delivery.
       </p>
       <ul>
@@ -80,9 +83,10 @@ async function placeOrder() {
           <ProductImage :product="{ name: item.name, image_url: item.image_url, colours: item.colours }" :colour="item.colour" class="thumb" />
           <div class="line-info">
             <RouterLink :to="`/products/${item.product_code}`" class="line-name">{{ item.name }}</RouterLink>
-            <p class="small muted">Size {{ item.size }}, {{ item.colour }}</p>
+            <p class="small muted">{{ item.measurements ? item.size : `Size ${item.size}` }}, {{ item.colour }}</p>
             <p v-if="item.custom_details" class="small"><span class="tag custom">Made to order</span> {{ item.custom_details }}</p>
             <p v-if="item.notes" class="small muted">Notes: {{ item.notes }}</p>
+            <p v-if="item.reference_image" class="small muted">Reference picture attached for the tailor</p>
             <div class="qty">
               <button type="button" class="pill" aria-label="One fewer" @click="bag.setQuantity(item.key, item.quantity - 1)">−</button>
               <span aria-live="polite">{{ item.quantity }}</span>

@@ -1,12 +1,17 @@
 <script setup>
 // A customer's account: log in or sign up, then see their details and past orders.
-import { reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { api } from '../api.js'
 import { useAccount } from '../stores/account.js'
 import { formatDate, formatTaka } from '../utils/format.js'
 
 const account = useAccount()
 const mode = ref('login') // 'login' | 'register'
+// With a capital first letter, as in the top menu ("maisha" reads better as "Maisha")
+const firstName = computed(() => {
+  const name = (account.state.customer?.name || '').trim().split(/\s+/)[0]
+  return name.charAt(0).toUpperCase() + name.slice(1)
+})
 const form = reactive({ name: '', email: '', phone: '', password: '' })
 const busy = ref(false)
 const error = ref('')
@@ -52,7 +57,7 @@ watch(() => account.state.customer, (customer) => {
     <template v-else-if="account.state.customer">
       <div class="top">
         <div>
-          <h1>Hello, {{ account.state.customer.name.split(' ')[0] }}</h1>
+          <h1>Hello, {{ firstName }}</h1>
           <p class="muted">{{ account.state.customer.email }}<span v-if="account.state.customer.phone"> · {{ account.state.customer.phone }}</span></p>
         </div>
         <button type="button" class="button secondary small" @click="account.logOut()">Log out</button>
@@ -67,8 +72,8 @@ watch(() => account.state.customer, (customer) => {
 
       <article v-for="order in orders" :key="order.order_id" class="order">
         <header class="order-head">
-          <strong>Order {{ order.order_id }}</strong>
-          <span class="muted">{{ formatDate(order.ordered_at) }}</span>
+          <strong>Order {{ order.customer_order_number }}</strong>
+          <span class="muted">{{ formatDate(order.ordered_at) }} · Ref #{{ order.order_id }}</span>
           <span class="order-total">{{ formatTaka(order.total_bdt) }}</span>
         </header>
         <ul class="items">
@@ -79,7 +84,7 @@ watch(() => account.state.customer, (customer) => {
               <span class="tag custom">Made to order</span> {{ item.custom_details }} ·
               {{ STATUS_LABELS[item.status] || item.status }}<span v-if="item.ready_by">, ready around {{ formatDate(item.ready_by) }}</span>
             </p>
-            <RouterLink :to="`/products/${item.product_code}#reviews`" class="small">Write a review</RouterLink>
+            <p class="small"><RouterLink :to="`/products/${item.product_code}#reviews`">Write a review</RouterLink></p>
           </li>
         </ul>
         <p class="small muted">Includes {{ formatTaka(order.shipping_bdt) }} delivery. Paid on delivery.</p>
