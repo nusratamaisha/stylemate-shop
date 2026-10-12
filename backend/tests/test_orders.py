@@ -1,5 +1,7 @@
 """Checkout: prices are recalculated on the server, and custom pieces join the owner's queue."""
 
+import io
+
 from .conftest import option_id
 
 CUSTOMER = {"name": "Nusrat", "phone": "01700000000", "address": "Dhaka", "delivery_area": "inside_dhaka"}
@@ -22,7 +24,7 @@ def test_custom_order_adds_extras_and_ready_date(client):
                               "option_ids": [option_id("Sleeves", "Short sleeves")], "notes": "Bust 34"})
     item = response.get_json()["items"][0]
     assert item["is_custom"] is True
-    assert item["unit_price_bdt"] == 4200 + 150
+    assert item["unit_price_bdt"] == 4200 - 100
     assert item["custom_details"] == "Sleeves: Short sleeves"
     assert item["ready_by"] is not None
     assert item["status"] == "new"
@@ -76,3 +78,98 @@ def test_checkout_page_gets_the_shops_shipping_charges(client):
         {"area": "inside_dhaka", "label": "Inside Dhaka", "charge_bdt": 80},
         {"area": "outside_dhaka", "label": "Outside Dhaka", "charge_bdt": 150},
     ]
+
+
+def measured(**changes):
+    return {"product_code": "SR-002", "colour": "Maroon",
+            "option_ids": [option_id("Fit", "Made to your measurements"), option_id("Sleeves", "Sleeveless")],
+            "measurements": {"bust": 38, "waist": "32", "hip": 40, "length": 36}, **changes}
+
+
+def test_made_to_measure_needs_no_size(client):
+    response = client.post("/api/orders", json={"customer": CUSTOMER, "items": [measured()]})  # no "size" at all
+    assert response.status_code == 201
+    item = response.get_json()["items"][0]
+    assert item["size"] == "Made to measure"
+    assert item["unit_price_bdt"] == 4200 + 600 - 150
+    assert item["custom_details"] == ("Sleeves: Sleeveless; Fit: Made to your measurements; "
+                                      "Measurements: bust 38 in, waist 32 in, hip 40 in, length 36 in")
+
+
+def test_made_to_measure_needs_the_measurements(client):
+    missing = client.post("/api/orders", json={"customer": CUSTOMER, "items": [measured(measurements={"bust": 38})]})
+    assert missing.status_code == 400 and "waist measurement" in missing.get_json()["error"]
+    silly = client.post("/api/orders", json={"customer": CUSTOMER, "items": [
+        measured(measurements={"bust": 380, "waist": 32, "hip": 40})]})
+    assert silly.status_code == 400 and "between 20 and 72" in silly.get_json()["error"]
+
+
+def test_made_to_measure_replaces_the_length_options(client):
+    response = client.post("/api/price-quote", json={"product_code": "SR-002", "option_ids": [
+        option_id("Fit", "Made to your measurements"), option_id("Length", "Shorter by 2 inches")]})
+    assert response.status_code == 400 and "exact length" in response.get_json()["error"]
+
+
+PNG = b"\x89PNG fake picture"
+
+
+def upload_picture(client, content=PNG, name="idea.png", mimetype="image/png"):
+    return client.post("/api/reference-pictures", data={"picture": (io.BytesIO(content), name, mimetype)},
+                       content_type="multipart/form-data")
+
+
+def test_reference_picture_reaches_only_the_owner(app, client, owner_client):
+    uploaded = upload_picture(client)
+    assert uploaded.status_code == 201
+    name = uploaded.get_json()["reference_image"]
+    assert name.endswith(".png") and "idea" not in name  # a random name, never the customer's file name
+
+    placed = client.post("/api/orders", json={"customer": CUSTOMER, "items": [measured(reference_image=name)]})
+    item = placed.get_json()["items"][0]
+    assert item["has_reference_image"] is True
+
+    url = f"/api/owner/custom-orders/{item['id']}/reference-picture"
+    assert owner_client.get(url).data == PNG
+    assert app.test_client().get(url).status_code == 401  # a visitor who is not the owner
+
+
+def test_reference_picture_must_be_a_real_upload(client):
+    assert upload_picture(client, b"%PDF", "idea.pdf", "application/pdf").status_code == 400
+    # A made-up or tampered name is ignored, not trusted
+    placed = client.post("/api/orders", json={"customer": CUSTOMER, "items": [
+        measured(reference_image="../../stylemate.db")]})
+    assert placed.status_code == 201 and placed.get_json()["items"][0]["has_reference_image"] is False
+    # A ready-made piece has no tailor, so a picture sent with it is dropped
+    name = upload_picture(client).get_json()["reference_image"]
+    ready = client.post("/api/orders", json={"customer": CUSTOMER, "items": [{**BELA, "reference_image": name}]})
+    assert ready.get_json()["items"][0]["has_reference_image"] is False
+
+
+def stock_of(client, code):
+    return client.get(f"/api/products/{code}").get_json()["stock"]
+
+
+def test_ordering_a_ready_made_piece_lowers_its_stock(client):
+    assert stock_of(client, "SR-003") == 25
+    order(client, {**BELA, "quantity": 2}, {**BELA, "colour": "White"})  # two lines of the same piece
+    assert stock_of(client, "SR-003") == 22
+
+
+def test_made_to_order_pieces_use_no_stock(client):
+    before = stock_of(client, "SR-002")
+    order(client, {"product_code": "SR-002", "size": "M", "colour": "Maroon",
+                   "option_ids": [option_id("Sleeves", "Short sleeves")]})
+    assert stock_of(client, "SR-002") == before
+
+
+def test_an_order_for_more_than_is_left_is_refused_and_changes_nothing(client):
+    maxi = {"product_code": "SR-002", "size": "M", "colour": "Maroon"}  # 6 in stock
+    # 4 + 4 across two lines is more than 6, even though each line alone would fit
+    refused = order(client, {**BELA}, {**maxi, "quantity": 4}, {**maxi, "colour": "Emerald", "quantity": 4})
+    assert refused.status_code == 400 and "only 6" in refused.get_json()["error"]
+    assert (stock_of(client, "SR-002"), stock_of(client, "SR-003")) == (6, 25)  # the tunic in the same order wasn't taken
+
+    assert order(client, {**maxi, "quantity": 6}).status_code == 201
+    assert stock_of(client, "SR-002") == 0
+    sold_out = order(client, maxi)
+    assert sold_out.status_code == 400 and "out of stock" in sold_out.get_json()["error"]

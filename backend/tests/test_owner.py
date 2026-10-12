@@ -96,3 +96,57 @@ def test_csv_upload_reads_length_and_sleeve(owner_client, client):
 
     bad = upload(owner_client, with_specs.replace("56,Full", "long,Full"))
     assert "length_inches must be a whole number" in bad.get_json()["error"]
+
+
+DELIVERY = {"name": "Nadia", "phone": "01711000000", "address": "House 4, Sylhet", "delivery_area": "outside_dhaka"}
+
+
+def test_owner_sees_every_order_and_the_sales_numbers(owner_client):
+    assert owner_client.get("/api/owner/orders").get_json()["summary"]["order_count"] == 0
+
+    owner_client.post("/api/orders", json={"customer": DELIVERY, "items": [
+        {"product_code": "SR-003", "size": "M", "colour": "Mustard", "quantity": 2},  # ready-made
+        {"product_code": "SR-002", "size": "M", "colour": "Maroon",
+         "option_ids": [option_id("Length", "Longer by 2 inches")]},  # made to order
+    ]})
+    owner_client.post("/api/orders", json={"customer": {**DELIVERY, "delivery_area": "inside_dhaka"}, "items": [
+        {"product_code": "SR-003", "size": "S", "colour": "White"}]})
+
+    data = owner_client.get("/api/owner/orders").get_json()
+    summary = data["summary"]
+    assert (summary["order_count"], summary["pieces_sold"], summary["custom_pieces"]) == (2, 4, 1)
+    assert summary["sales_bdt"] == 1850 * 3 + 4200 + 250  # the clothes
+    assert summary["delivery_bdt"] == 150 + 80  # kept apart: it is not income
+    assert summary["best_sellers"][0] == {"name": "Bela Tiered Sundress", "quantity": 3}
+    assert summary["to_ship"] == 3
+
+    newest, first = data["orders"]
+    assert (first["customer_name"], first["address"], first["delivery_area"]) == ("Nadia", "House 4, Sylhet", "outside_dhaka")
+    assert [line["is_custom"] for line in first["items"]] == [False, True]  # ready-made lines are listed too
+    assert newest["total_bdt"] == 1850 + 80
+
+
+def test_owner_can_mark_a_ready_made_line_as_shipped(owner_client):
+    owner_client.post("/api/orders", json={"customer": DELIVERY, "items": [
+        {"product_code": "SR-003", "size": "M", "colour": "Mustard"}]})
+    line = owner_client.get("/api/owner/orders").get_json()["orders"][0]["items"][0]
+
+    updated = owner_client.patch(f"/api/owner/custom-orders/{line['id']}", json={"status": "shipped"})
+    assert updated.get_json()["status"] == "shipped"
+    assert owner_client.get("/api/owner/orders").get_json()["summary"]["to_ship"] == 0
+
+
+def test_orders_need_the_owner_login(client):
+    assert client.get("/api/owner/orders").status_code == 401
+
+
+def test_owner_can_send_todays_stock_to_the_assistant(owner_client, maira):
+    owner_client.post("/api/orders", json={"customer": DELIVERY, "items": [
+        {"product_code": "SR-003", "size": "M", "colour": "Mustard", "quantity": 5}]})
+
+    assert owner_client.post("/api/owner/products/sync").status_code == 200
+
+    dataset_id, _, content = maira.uploads[0]
+    row = next(line for line in content.decode().splitlines() if line.startswith("SR-003,"))
+    assert dataset_id == "dataset-1" and maira.trained == ["dataset-1"]
+    assert ",1850,20,no," in row  # price, then the stock after the order: 25 - 5

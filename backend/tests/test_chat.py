@@ -115,3 +115,28 @@ def test_order_for_an_out_of_stock_piece_is_refused(client, maira):
 
 def test_ordinary_answers_have_no_order(client):
     assert client.post("/api/chat", json={"message": "Something for a wedding?"}).get_json()["order"] is None
+
+
+def test_a_described_custom_piece_opens_the_product_page_prefilled(client, maira):
+    maira.answer = ("I've set that up for you. Check the price on the product page.\n"
+                    "[CUSTOMIZE product_id=SR-002; sleeves=sleeveless; bust=38; length=36; waist=; hip=]")
+    data = client.post("/api/chat", json={"message": "shefali, sleeveless, length 36, bust 38"}).get_json()
+
+    assert "[CUSTOMIZE" not in data["answer"]
+    custom = data["customize"]
+    assert custom["product"]["code"] == "SR-002"
+    assert custom["sleeves"] == "Sleeveless"  # an option this piece offers, in the shop's wording
+    assert custom["measurements"] == {"bust": 38, "length": 36}  # only what the customer gave
+    assert "price" not in custom and "total_bdt" not in custom  # the chat never prices a custom piece
+
+
+def test_customize_keeps_only_what_the_shop_can_make(client, maira):
+    # SR-002 already has full sleeves, and 400 inches is not a bust measurement
+    maira.answer = "Here you go.\n[CUSTOMIZE product_id=SR-002; sleeves=Full; bust=400; waist=30]"
+    custom = client.post("/api/chat", json={"message": "x"}).get_json()["customize"]
+    assert custom["sleeves"] == "" and custom["measurements"] == {"waist": 30}
+
+    # SR-003 can't be customized at all
+    maira.answer = "Sure.\n[CUSTOMIZE product_id=SR-003; bust=38]"
+    data = client.post("/api/chat", json={"message": "x"}).get_json()
+    assert data["customize"] is None and "can't be customized" in data["answer"]

@@ -56,7 +56,7 @@ def test_price_quote_endpoint(client):
     })
     assert response.status_code == 200
     data = response.get_json()
-    assert data["total_bdt"] == 4200 + 150 + 600
+    assert data["total_bdt"] == 4200 - 100 + 600  # short sleeves use less fabric, so they cost less
     assert data["ready_in_days"] == 7 + 2 + 3
 
 
@@ -96,3 +96,14 @@ def test_product_page_menu_fits_the_product(client):
     assert [item["label"] for item in groups["Sleeves"]["options"]] == ["Short sleeves", "Sleeveless"]
     assert groups["Length"]["current"] == "56 in"
     assert [item["new_length_inches"] for item in groups["Length"]["options"]] == [54, 58]
+
+
+def test_changes_that_use_less_fabric_lower_the_price(client):
+    # SR-002 in the test catalogue: ৳4,200, full sleeves, 56 inches
+    response = client.post("/api/price-quote", json={
+        "product_code": "SR-002",
+        "option_ids": [option_id("Sleeves", "Sleeveless"), option_id("Length", "Shorter by 2 inches")],
+    })
+    data = response.get_json()
+    assert data["total_bdt"] == 4200 - 150 - 100
+    assert data["is_custom"] is True and data["ready_in_days"] == 7 + 1 + 1  # cheaper, but still made to order

@@ -35,6 +35,7 @@ def app(maira, chorus, tmp_path):
             "SHOP_SLUG": "house-of-m",
             "UNANSWERED_SCORE_THRESHOLD": 30.0,
             "IMAGES_DIR": str(tmp_path),
+            "UPLOADS_DIR": str(tmp_path / "uploads"),
         },
         maira=maira,
         chorus=chorus,
@@ -75,10 +76,10 @@ def _seed():
                     maira_image_profile_id="image-profile-1")
     db.session.add(tenant)
     db.session.commit()
-    for position, (group, label, price, days, length_change) in enumerate(DEFAULT_OPTIONS):
+    for position, (group, label, price, days, length_change, measured) in enumerate(DEFAULT_OPTIONS):
         db.session.add(CustomizationOption(tenant_id=tenant.id, group=group, label=label,
-                                           extra_price_bdt=price, extra_days=days,
-                                           length_change_inches=length_change, position=position))
+                                           extra_price_bdt=price, extra_days=days, length_change_inches=length_change,
+                                           needs_measurements=measured, position=position))
     add_default_size_guide(tenant)
     add_default_faq(tenant)
     owner = User(tenant_id=tenant.id, email=OWNER_EMAIL)

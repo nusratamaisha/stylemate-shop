@@ -59,6 +59,21 @@ def test_order_history_shows_only_the_customers_own_orders(app, client):
     assert other.get("/api/account/orders").get_json() == []
 
 
+def test_each_customer_counts_their_own_orders_from_one(app, client):
+    buy(client)  # a guest order takes the shop's order 1
+    sign_up(client)
+    first, second = buy(client).get_json(), buy(client).get_json()
+
+    assert (first["order_id"], first["customer_order_number"]) == (2, 1)  # the shop's 2nd order, Nadia's 1st
+    assert (second["order_id"], second["customer_order_number"]) == (3, 2)
+    assert [order["customer_order_number"] for order in client.get("/api/account/orders").get_json()] == [2, 1]
+
+    other = app.test_client()
+    sign_up(other, email="other@example.com")
+    assert buy(other).get_json()["customer_order_number"] == 1  # the other customer starts at 1 too
+    assert buy(app.test_client()).get_json()["customer_order_number"] is None  # a guest has no numbering
+
+
 def test_review_needs_a_login_and_an_order(client):
     assert client.post("/api/products/SR-003/reviews", json={"rating": 5}).status_code == 401
     assert client.get("/api/products/SR-003/reviews").get_json()["blocked_reason"] == "login"
