@@ -6,6 +6,10 @@ __pycache__/
 *.pyc
 venv/
 .venv/
+.pytest_cache/
+
+# Local database
+*.db
 
 # Vue / Node
 node_modules/
