@@ -1,0 +1,127 @@
+# Handoff: Where StyleMate Stands
+
+Last updated: **October 11, 2026**. Update this file at the end of each working session.
+
+## The brief
+
+- Gigalogy internship final project. It must solve a real problem, earn revenue, and use Maira's `ask` endpoint. Chorus (speech-to-text) is an optional extra. Built with Flask and Vue. A strong result could lead to a permanent job.
+- **Dates:** feature freeze November 2, buffer November 9-10, deadline **November 10**.
+- **Problem:** small online clothing shops lose customers who can't get quick, trustworthy answers about sizes, stock, fabrics and occasions.
+- **Revenue idea:** shops pay a monthly plan for StyleMate (three plans, priced from the cost per conversation). One installation serves many shops (`tenant_id` everywhere).
+
+## What happened so far
+
+| Date | What |
+|---|---|
+| Oct 5-6 | Idea chosen. Maira `ask` and Chorus tested by hand in the sandbox. Stylist profile and `house-of-m-products` dataset (10 products) set up. Day 2 tests 1, 2, 3, 4, 6, 7 passed (`docs/maira-tests.md`). |
+| Oct 7 | At Maisha's request, the whole app was built in one go: backend, frontend, 38 tests and `docs/architecture.md`. She is now learning the code from that guide. |
+| Oct 11 | Image preview built in one go (journey G in `docs/architecture.md`): backend, product-page panel and 12 tests, 51 in total. Maira's full API spec was found, which settled the upload field name. Maisha's new plan: build everything first, then learn it for the presentation. |
+| Oct 11 | Image preview confirmed live with `gpt-image-2` (the first model, `gpt-image-2.5-sunburst`, was refused by the provider). Product specifications added: `length_inches` and `sleeve` columns, which fit the customization menu to each piece. 55 tests. |
+| Oct 11 | Size guide added: a page, a pop-up on product pages, and sleeve lengths on the sleeve options. 58 tests. |
+| Oct 11 | Product photos added to `data/images/`, and `data/products_sample.csv` rewritten to match them (new names, categories, colours, fabrics, lengths, sleeves, descriptions; same IDs, prices and stock). Tests now use their own fixed catalogue, `backend/tests/data/products.csv`. |
+| Oct 11 | Help page added (FAQ, contact details, message form) with a Messages tab in the owner dashboard. 63 tests. |
+| Oct 11 | FAQ, size guide and contact details sent to a new Maira dataset (`flask sync-help`); the assistant now answers from them. Daily limits per visitor added for messages and previews. Found and fixed: training straight after an upload trained nothing. 69 tests. |
+| Oct 11 | Ordering from the chat built: the assistant proposes an order with a marker line, Flask checks it, and the website opens checkout. Needs profile rule 7 pasted into the Maira console; not yet tried live. 73 tests. |
+| Oct 12 | Shop page grouped into sections (Dresses, Tops, Pants and skirts, Sets). Delivery charge added at checkout: ৳80 inside Dhaka, ৳150 outside, set by Flask. 76 tests. |
+| Oct 12 | Customer accounts added (sign up, log in, order history) with reviews from customers who ordered the piece. Guest checkout still works. 83 tests. |
+| Oct 7-8 | Local setup done: `.env` filled, `.flaskenv` added, `flask seed` run, both servers running. A wrong API key in `.env` (401 "Project credential not found") was fixed. |
+
+## Current state
+
+Working locally:
+
+- `uv run pytest` passes. Seed, backend and frontend run.
+- The CSV upload saves products to the local database.
+
+Not yet confirmed against the real APIs:
+
+- [ ] Chat answers in the widget (should work now that the keys are fixed)
+- [ ] Voice question through Chorus from the browser mic
+- [ ] Follow-up memory with `session_id`: ask "Do you have an office dress?", then "Does it come in XXL?"
+- [ ] CSV upload reaching the Maira dataset (field name fixed, see below)
+- [x] Image preview against the real image model (Oct 11, `gpt-image-2`). Try-on with a customer photo is still untested.
+- [ ] Ordering from the chat: paste rule 7 and the new Instructions from `docs/maira-profile.md` into the stylist profile, then try "I want the ... in S", "yes"
+- [ ] The assistant knowing lengths and sleeves: needs the new CSV uploaded to Maira (same upload as the line above)
+
+## CSV upload to Maira: fixed in code, not yet confirmed live
+
+- The 400 "Either a file or Scrap URLs must be provided" came from the multipart field name. The tutorial says `file`; Maira's API spec says `dataset_file`. `upload_dataset_file()` now sends `dataset_file`, and `tests/test_clients.py` checks it.
+- **A second bug was fixed on Oct 11:** the code trained immediately after uploading, before Maira had read the file, so nothing was trained. It now waits (`upload_and_train()`). This is confirmed live for the help dataset, not yet for the product upload.
+- **To confirm:** upload from the owner Products tab, then check in the Maira console that the dataset still has 10 documents, SR-003's "Updated At" is today, and that training ran.
+- **The sample CSV has two new columns** (`length_inches`, `sleeve`) since Oct 11. The local database already has them; Maira does not until this upload.
+- **The products themselves changed on Oct 11** to match the photos (SR-002 is now the Shefali Floral Balloon-Sleeve Dress, not the Embroidered Maxi). Until this upload, the assistant still describes the old ten products, and chat product cards won't appear because the names no longer match. After it, the expected answers in `docs/maira-tests.md` (which name the old products) need re-running.
+- **Photo licences are unchecked.** The photos look like they were saved from Pinterest (736 px wide, mirror selfies, collages), not from Pexels or Unsplash as planned. Check before showing the site outside the team.
+- **Test data to undo:** SR-003's price was changed to ৳1,500 using `~/Documents/new/upload_test.csv`. Uploading `data/products_sample.csv` restores ৳1,850 and is the confirmation upload at the same time.
+
+## Image preview: working
+
+The panel stays hidden until the shop has an image profile. How it was switched on (repeat for a new shop or a fresh clone):
+
+1. In the Maira console, create a second profile (for example `The House of "M" pictures`) with an image model such as `gpt-image-2`. It needs no dataset tags.
+2. Add `MAIRA_IMAGE_PROFILE_ID=<its ID>` to `backend/.env`.
+3. From `backend/`, run `uv run flask seed` again. It is safe to repeat and copies the ID onto the shop's row.
+4. Restart Flask, open a customizable product, choose a change and press "Show me".
+5. Answer the open questions under "Image generation" in `docs/maira-api.md`, then tighten `parse_generated_image()`.
+
+**Oct 11:** switched on. The profile `StyleMate Image` uses `gpt-image-2`; `gpt-image-2.5-sunburst` is listed by Maira but refused by the provider. A dress preview with a typed idea works. Still to try: a preview with a customer photo, and whether the picture link keeps working after a few hours.
+
+The local database got the new `maira_image_profile_id` column on Oct 11 with a one-off `ALTER TABLE`, so it did not need deleting. A fresh clone gets the column from `flask seed` as usual.
+
+## Git
+
+The last pushed commit was on October 6 (the Day 2 test sheet). The backend, frontend, docs, data and `.flaskenv` from October 7 may not be committed yet, so check `git status`. Suggested commits:
+
+```bash
+git add CLAUDE.md docs/ data/ .gitignore README.md && git commit -m "docs: add architecture guide, handoff notes and sample data"
+git add backend/ && git commit -m "feat: add Flask backend with chat, voice, pricing, orders and owner API"
+git add frontend/ && git commit -m "feat: add Vue storefront, chat widget and owner dashboard"
+git push
+```
+
+Before committing, check that `git status` doesn't list `backend/.env` or `backend/stylemate.db`.
+
+## Next steps, in order
+
+1. Confirm the five unchecked items under "Current state", starting with the CSV upload and the image profile.
+2. In the Maira console, update the stylist profile's Introduction and Instructions from `docs/maira-profile.md` (rule 5 for customization, rule 7 for ordering from the chat).
+3. Commit and push.
+4. Learn the code: follow the reading order at the end of `docs/architecture.md`.
+5. **Week 2 (Oct 12-18):**
+   - Product photos: pick each photo first, then make the product row match it. Save as `data/images/<product_id>.jpg`, about 800 px wide and under 200 KB, from Pexels or Unsplash (not Unsplash+, no logos, not BlueChic).
+   - Grow the catalogue to 40-60 products, uploaded through the owner Products tab.
+   - Test 9 in `docs/maira-tests.md`: a decoy `other-shop` dataset with a shoe, which proves one shop can't see another's data.
+   - Show the mentor the working app.
+6. **Week 3 (Oct 19-25):**
+   - ~~A policies dataset~~ Done Oct 11 as `house-of-m-help` (`flask sync-help`). Still to do: replace the sample FAQ answers with the shop's real policies, then run the command again.
+   - Tune the profile: price and sizes in every recommendation; try top_p 0.1-0.3.
+   - Tune `UNANSWERED_SCORE_THRESHOLD` using real scores.
+   - Try Chorus `initial_prompt` with product names.
+   - Test the mic on Chrome, Firefox and a phone.
+7. **Week 4 (Oct 26-Nov 1):** fix what real testing finds. Optional extras (photo search, daily summary) only if ahead.
+8. **Week 5 (Nov 2-8):**
+   - Feature freeze, then a clean-setup test from a fresh clone.
+   - Demo script: voice question, one honest refusal, customization with live price, the owner seeing the demand gap.
+   - Revenue slide: about 1,650 prompt tokens per question with 10 products.
+   - Architecture diagram and a backup screen recording. Rehearse twice.
+
+## Decisions and why
+
+- **Flask in the middle:** it keeps the keys secret, Chorus blocks browsers (CORS), it owns prices, and it logs questions for the dashboard.
+- **AI explains, Flask prices:** custom prices are never quoted by the assistant.
+- **Multi-shop from the start:** a Tenant row holds each shop's Maira profile and dataset IDs. Profile Dataset Tags keep each assistant inside its own data.
+- **Unanswered detection:** the top `similarity_score` is below 30 (configurable).
+- **Product cards in chat:** products whose full name appears in the answer.
+- **Voice:** the browser records 16 kHz mono WAV itself (`utils/wavRecorder.js`) because browsers default to WebM, which Chorus doesn't accept.
+- **SQLite and no migrations:** simplest for a 5-week project (YAGNI).
+- **Customization options:** shop-wide rows, not per product.
+- **Package name `stylemate`:** it names the platform, not one shop.
+
+## Gotchas already hit
+
+- Run backend commands from `backend/`, because Flask reads `.flaskenv` from the current folder.
+- "Address already in use" on port 5000: find the process with `ss -ltnp | grep :5000`.
+- `ECONNREFUSED 127.0.0.1:5000` in the Vite terminal means Flask isn't running.
+- `http://127.0.0.1:5000/` shows 404 by design; try `/api/shop`.
+- Restart Flask after editing `.env`. Debug mode reloads code changes only.
+- Check that keys are set without printing them (from `backend/`): `awk -F= '/_KEY=/{print $1, length($2)}' .env`
+- Pressing Ctrl+C in the Vite terminal stops the frontend, and the browser then shows "connection refused".
