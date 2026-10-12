@@ -24,6 +24,11 @@ Last updated: **October 11, 2026**. Update this file at the end of each working 
 | Oct 11 | Ordering from the chat built: the assistant proposes an order with a marker line, Flask checks it, and the website opens checkout. Needs profile rule 7 pasted into the Maira console; not yet tried live. 73 tests. |
 | Oct 12 | Shop page grouped into sections (Dresses, Tops, Pants and skirts, Sets). Delivery charge added at checkout: ৳80 inside Dhaka, ৳150 outside, set by Flask. 76 tests. |
 | Oct 12 | Customer accounts added (sign up, log in, order history) with reviews from customers who ordered the piece. Guest checkout still works. 83 tests. |
+| Oct 12 | Each customer's orders numbered from 1; owner login link removed from the storefront; shorter sleeves and length now reduce the price; the notes box explains that measurements need an option. 85 tests. |
+| Oct 12 | Made to measure: no S/M/L, measurement boxes, a standard-size suggestion, and a chat hand-off to the product page (needs profile rule 8 pasted; not yet tried live). 90 tests. |
+| Oct 12 | Customers can attach a reference picture for the tailor to a made-to-order piece; only the owner can open it. 92 tests. |
+| Oct 12 | Owner dashboard: new Orders tab with sales numbers, best sellers and every order (ready-made and made to order), with a status per line. 95 tests. |
+| Oct 12 | Ordering a ready-made piece now lowers its stock; the owner can send today's stock to the assistant from the Products tab. 99 tests. |
 | Oct 7-8 | Local setup done: `.env` filled, `.flaskenv` added, `flask seed` run, both servers running. A wrong API key in `.env` (401 "Project credential not found") was fixed. |
 
 ## Current state
@@ -38,10 +43,10 @@ Not yet confirmed against the real APIs:
 - [ ] Chat answers in the widget (should work now that the keys are fixed)
 - [ ] Voice question through Chorus from the browser mic
 - [ ] Follow-up memory with `session_id`: ask "Do you have an office dress?", then "Does it come in XXL?"
-- [ ] CSV upload reaching the Maira dataset (field name fixed, see below)
+- [x] CSV upload reaching the Maira dataset (Oct 12: all 10 new products uploaded from the owner Products tab and trained)
 - [x] Image preview against the real image model (Oct 11, `gpt-image-2`). Try-on with a customer photo is still untested.
-- [ ] Ordering from the chat: paste rule 7 and the new Instructions from `docs/maira-profile.md` into the stylist profile, then try "I want the ... in S", "yes"
-- [ ] The assistant knowing lengths and sleeves: needs the new CSV uploaded to Maira (same upload as the line above)
+- [x] Ordering from the chat (Oct 12: rule 7 is in the profile; "I'd like the Kaya Chiffon Midi Dress in size M, navy" produced a valid order line that Flask accepted). Still to do: click through it in the browser, and replace the profile's Instructions text, which still says "I can't place orders"
+- [x] The assistant knowing lengths and sleeves (Oct 12: `length_inches` is in the Maira documents)
 
 ## CSV upload to Maira: fixed in code, not yet confirmed live
 

@@ -50,6 +50,7 @@ Each file has one job. If you know what you want to change, this table tells you
 | `services/reviews.py` | Product reviews, allowed only for a customer who ordered the piece |
 | `services/help.py` | The Help page: questions and answers, contact details, saving customers' messages, and sending the answers to Maira |
 | `services/limits.py` | Daily limits per visitor for contact messages and picture previews |
+| `services/uploads.py` | Checks uploaded pictures and keeps customers' reference pictures for the tailor |
 | `services/sizes.py` | The size guide: what body each size fits, and how long each kind of sleeve is |
 | `services/preview.py` | Image preview: checks the request, writes the prompt, asks Maira for the picture |
 | `services/orders.py` | Checkout and the custom order queue |
@@ -137,6 +138,16 @@ Options are database rows (`CustomizationOption`), not code. A shop adds a new o
 
 **The size guide** answers the two questions a number alone can't: "what body is an XL for?" and "how long is a short sleeve?". It is two small tables per shop, `SizeGuideRow` (bust, waist and hip for each size) and `SleeveLength` (inches for each kind of sleeve), filled with starting values by `flask seed`. `GET /api/size-guide` returns both. The customer meets it in three places: the "Size guide" page in the top menu, a "Size guide" link beside the size choice that opens a pop-up showing only that product's sizes, and the sleeve options themselves, which read "Short sleeves (about 7 in)". It is rows, not code, for the same reason as the options: another shop cuts its sizes differently.
 
+**A change can lower the price.** Short sleeves, sleeveless and a shorter length use less fabric, so their rows hold a negative amount (−৳100, −৳150, −৳100) and the panel shows them in green. They are still made to order, so the ready date still applies.
+
+**Made to measure needs no S, M or L.** The Fit option "Made to your measurements" is marked `needs_measurements`. Choosing it swaps the size buttons for four number boxes (bust, waist and hip required, length optional), and hides the "2 inches shorter/longer" options, because the piece is cut to the exact length typed. `orders.py` then stores the size as "Made to measure" and writes the checked measurements into the order for the tailor. The panel also compares the measurements with the size guide: if a standard size already fits within 2 inches, it says so and offers to order that size and save the ৳600. A shop that tells customers when they don't need the paid option earns trust.
+
+**From the chat.** If a customer says "Shefali, sleeveless, length 36, bust 38", profile rule 8 makes the assistant end its answer with `[CUSTOMIZE product_id=SR-002; sleeves=Sleeveless; bust=38; length=36]`. `read_customize()` in `services/chat.py` keeps only what the shop can make (a sleeve this piece offers, measurements between 20 and 72 inches) and the chat shows a "See the price and finish" button. It opens the product page with those choices filled in. The chat never prices a custom piece: the product page does, through `pricing.py`.
+
+**A reference picture for the tailor.** Under the notes box a customer can attach a photo or sketch. It is uploaded as soon as it is chosen (`POST /api/reference-pictures`), because the bag lives in the browser and can't hold a file. Flask checks the type and size, saves it in `backend/uploads/` under a random name, and returns that name; the order line then carries it. At checkout `orders.py` accepts the name only if that file really exists and the line is made to order, so a made-up name is ignored. The picture is opened through an owner-only route (`/api/owner/custom-orders/<id>/reference-picture`), and the owner sees a thumbnail in the custom order queue. Uploads are limited per visitor per day like messages and previews.
+
+**Typed measurements never change the price.** The price comes only from the options chosen. If a customer types measurements without choosing an option, the panel says the note won't be sent and offers "Made to your measurements" (+৳600) in one click. Without an option the order is a standard-size piece at the listed price.
+
 Both columns are optional. A product without them keeps the full menu and simply can't show results. The sleeve match compares words, so the CSV must use the same words as the option labels ("Short" for "Short sleeves").
 
 ### D. Checkout
@@ -144,7 +155,8 @@ Both columns are optional. A product without them keeps the full menu and simply
 1. `BagView.vue` shows the two delivery areas and their charges, which come from `GET /api/shop` (৳80 inside Dhaka, ৳150 outside). The customer picks one and sees subtotal, delivery and total.
 2. It sends `POST /api/orders` with the customer's details, the **delivery area**, and each line's product, size, colour, quantity, options and notes. **Prices and the delivery charge are not sent.**
 3. `services/orders.py` checks every size and colour exists, recalculates every price with `pricing.py`, looks up the delivery charge for the chosen area with `pricing.shipping_charge()`, and checks stock for ready-made pieces. The charge is once per order, not per piece, and is saved on the order with the area. Custom pieces are made to order, so an out-of-stock dress can still be ordered with changes.
-4. Custom lines get status `new` and a ready date, and appear in the owner's custom order queue.
+4. **Stock goes down.** `_take_from_stock()` adds up the ready-made lines per product (stock is per product, so one in each colour counts as two), refuses the whole order if any piece is short ("only 6 left"), and otherwise lowers each product's stock. Everything is saved in one commit, so a refused order changes nothing. Made-to-order lines are sewn for the customer and use no stock.
+5. Custom lines get status `new` and a ready date, and appear in the owner's custom order queue.
 
 The two charges are fields on the shop's `Tenant` row, so another shop can charge differently without a code change. The customer chooses the area themselves; the address is free text, so Flask can't check that it matches.
 
@@ -160,7 +172,9 @@ There is no payment. It's a demo checkout.
 
 ### F. The owner dashboard
 
-`services/insights.py` reads the shop's `ChatTurn` rows and returns:
+The dashboard opens on the **Orders** tab (`GET /api/owner/orders`). `orders.sales_summary()` gives the numbers an owner checks first: how many orders, sales in taka (with delivery money shown apart, because it is collected, not earned), pieces sold and how many were made to order, lines still to ship, and the five best sellers. Below them, `orders.all_orders()` lists **every** order, ready-made and made to order, with the customer's name, phone, address and delivery area, and a status for each line. The **Custom orders** tab is the tailor's queue: the same made-to-order lines, with their changes, measurements and reference pictures.
+
+For the **Customer questions** tab, `services/insights.py` reads the shop's `ChatTurn` rows and returns:
 
 - how many questions were asked, the share answered from the catalogue, and how many came by voice;
 - the most asked questions (grouped so "Do you sell shoes?" and "do you sell shoes" count together);
@@ -191,10 +205,10 @@ This covers two wishes with one flow: "show me this dress with my changes" and "
 1. "Log in" in the top menu opens `AccountView.vue`. A new customer signs up with a name, email and password (at least 8 characters); `POST /api/account/register` saves a `Customer` row with the password **hashed**, never as typed, and logs them in.
 2. Logging in sets `customer_id` in the signed session cookie. Every page asks `GET /api/account/me` once, which answers the customer or `null` for a guest.
 3. At checkout, `POST /api/orders` links the order to the logged-in customer (`Order.customer_id`). A guest can still order; that order belongs to no account. This also keeps ordering from the chat working without a login.
-4. The account page lists the customer's orders from `GET /api/account/orders`, newest first, with each made-to-order piece's status. The query filters by the customer's own ID, so nobody can read another person's orders.
+4. The account page lists the customer's orders from `GET /api/account/orders`, newest first, with each made-to-order piece's status. **Each customer's orders are numbered from 1** (`customer_order_number`), so a customer never sees gaps left by other people's orders. The shop-wide ID is shown beside it as "Ref #", because that is the number the owner searches by. The query filters by the customer's own ID, so nobody can read another person's orders.
 5. Each product page shows its reviews and the average (`GET /api/products/<code>/reviews`). The form appears only for a logged-in customer **who has ordered that piece** (`reviews.has_ordered()`), and each customer gets one review per product: writing again replaces it. Reviews show the first name only.
 
-**Owner and customer logins are separate on purpose.** They are two tables (`User` and `Customer`) and two session keys (`user_id` and `customer_id`). `owner_required` only ever looks at `user_id`, so a customer account can never open the dashboard, and a test checks exactly that.
+**Owner and customer logins are separate on purpose.** The storefront has no link to the owner login: the owner opens `/owner/login` directly. Hiding the link is tidiness, not security; what protects the dashboard is `owner_required`. They are two tables (`User` and `Customer`) and two session keys (`user_id` and `customer_id`). `owner_required` only ever looks at `user_id`, so a customer account can never open the dashboard, and a test checks exactly that.
 
 **Why only buyers can review:** a review from someone who never bought the piece tells the next customer nothing, and it is the cheapest protection against fake reviews.
 
@@ -238,7 +252,7 @@ Run them from `backend/`:
 uv run pytest
 ```
 
-There are 83 tests. They use the fake clients, so they need no keys, cost nothing and run in seconds. They cover response parsing (including the `detail` wrapper and string scores), Chorus polling and timeouts, pricing rules, checkout that ignores tampered prices, the unanswered flag, the owner login wall, CSV import errors, and the image preview (the prompt, the order of reference pictures, and every refusal).
+There are 99 tests. They use the fake clients, so they need no keys, cost nothing and run in seconds. They cover response parsing (including the `detail` wrapper and string scores), Chorus polling and timeouts, pricing rules, checkout that ignores tampered prices, the unanswered flag, the owner login wall, CSV import errors, and the image preview (the prompt, the order of reference pictures, and every refusal).
 
 ## 7. Known limits and next steps
 
@@ -249,8 +263,12 @@ There are 83 tests. They use the fake clients, so they need no keys, cost nothin
 | A try-on picture is the model's impression, not a fitting | Keep the "AI-drawn preview" note; never promise fit from it |
 | Whether `session_id` gives follow-up memory hasn't been confirmed | Ask "Do you have an office dress?", then "Does it come in XXL?" in the chat |
 | The unanswered threshold (30) comes from two test questions | Watch the scores as real questions come in, and adjust `UNANSWERED_SCORE_THRESHOLD` |
+| Orders lower stock in the database at once, but Maira only knows the stock it was last sent | Press "Send today's stock to the stylist" in the Products tab. The website stays correct either way: product pages, chat cards and chat orders all check the database |
+| Uploading a products CSV sets stock to the numbers in the file, undoing what orders took off | Put today's stock in the CSV before uploading it |
+| Stock is one number per product, not per size and colour | Fine for a demo; a real shop needs stock per size and colour |
 | Stock in Maira is a snapshot from the last CSV upload | Re-upload the CSV after stock changes |
 | Products removed from the CSV stay in the database and in Maira | Delete them in the Maira console for now |
+| An option has one price for every product. "Short sleeves" is −৳100 even on a sleeveless piece, where it would add fabric | No customizable piece is sleeveless today; price by direction (compare sleeve lengths) if one is added |
 | Customization options are shop-wide; only the sleeve and length options adapt to the product | Fine for one shop; make them per product only if a shop needs it |
 | The lengths and sleeves in `data/products_sample.csv` are sample values, not measured | Replace them with real measurements when the photos are chosen |
 | One length per product, though real length varies a little by size | Add a length per size only if customers ask |
@@ -259,6 +277,7 @@ There are 83 tests. They use the fake clients, so they need no keys, cost nothin
 | Daily limits count by IP address, so people sharing one connection share a limit, and during local development every visitor is 127.0.0.1 | Raise the limits in `.env` for a demo; behind a proxy, pass the visitor's real address through |
 | The FAQ answers and contact details are sample text (delivery times, exchange rules, cash on delivery, a made-up phone and address) | Replace them in `cli.py` (`DEFAULT_FAQ`, `SHOP`) with the shop's real ones |
 | The owner can't edit the FAQ or mark messages as answered | Add when a real shop needs it |
+| A reference picture uploaded for a piece that is never ordered stays in `backend/uploads/` | Delete files older than a few days that no order points to |
 | Accounts have no password reset, no email confirmation and no limit on wrong password attempts | Needs an email service; add before real customers use it |
 | The owner can't see, hide or answer reviews | Add a Reviews tab to the dashboard if a shop needs moderation |
 | Orders placed as a guest are not attached to an account created later | Fine for a demo |
