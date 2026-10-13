@@ -12,6 +12,10 @@ venv/
 *.db
 backend/uploads/
 
+# Product photos stay on this computer (licences unchecked); the folder's README is kept
+data/images/*
+!data/images/README.md
+
 # Vue / Node
 node_modules/
 dist/
