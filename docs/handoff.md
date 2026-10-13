@@ -1,6 +1,6 @@
 # Handoff: Where StyleMate Stands
 
-Last updated: **October 11, 2026**. Update this file at the end of each working session.
+Last updated: **October 13, 2026**. Update this file at the end of each working session.
 
 ## The brief
 
@@ -29,6 +29,7 @@ Last updated: **October 11, 2026**. Update this file at the end of each working 
 | Oct 12 | Customers can attach a reference picture for the tailor to a made-to-order piece; only the owner can open it. 92 tests. |
 | Oct 12 | Owner dashboard: new Orders tab with sales numbers, best sellers and every order (ready-made and made to order), with a status per line. 95 tests. |
 | Oct 12 | Ordering a ready-made piece now lowers its stock; the owner can send today's stock to the assistant from the Products tab. 99 tests. |
+| Oct 13 | The ten Pinterest photos were replaced with 16 from Pexels and Unsplash (sources in `docs/photo-credits.md`), and `data/products_sample.csv` was rewritten as 16 products to match them. Loaded into the local database only: **Maira still has the old ten products**, so the assistant describes pieces the shop no longer shows until the new file is uploaded from the owner Products tab. Target is 40 products. |
 | Oct 7-8 | Local setup done: `.env` filled, `.flaskenv` added, `flask seed` run, both servers running. A wrong API key in `.env` (401 "Project credential not found") was fixed. |
 
 ## Current state
@@ -48,15 +49,13 @@ Not yet confirmed against the real APIs:
 - [x] Ordering from the chat (Oct 12: rule 7 is in the profile; "I'd like the Kaya Chiffon Midi Dress in size M, navy" produced a valid order line that Flask accepted). Still to do: click through it in the browser, and replace the profile's Instructions text, which still says "I can't place orders"
 - [x] The assistant knowing lengths and sleeves (Oct 12: `length_inches` is in the Maira documents)
 
-## CSV upload to Maira: fixed in code, not yet confirmed live
+## CSV upload to Maira: working
 
-- The 400 "Either a file or Scrap URLs must be provided" came from the multipart field name. The tutorial says `file`; Maira's API spec says `dataset_file`. `upload_dataset_file()` now sends `dataset_file`, and `tests/test_clients.py` checks it.
-- **A second bug was fixed on Oct 11:** the code trained immediately after uploading, before Maira had read the file, so nothing was trained. It now waits (`upload_and_train()`). This is confirmed live for the help dataset, not yet for the product upload.
-- **To confirm:** upload from the owner Products tab, then check in the Maira console that the dataset still has 10 documents, SR-003's "Updated At" is today, and that training ran.
-- **The sample CSV has two new columns** (`length_inches`, `sleeve`) since Oct 11. The local database already has them; Maira does not until this upload.
-- **The products themselves changed on Oct 11** to match the photos (SR-002 is now the Shefali Floral Balloon-Sleeve Dress, not the Embroidered Maxi). Until this upload, the assistant still describes the old ten products, and chat product cards won't appear because the names no longer match. After it, the expected answers in `docs/maira-tests.md` (which name the old products) need re-running.
-- **Photo licences are unchecked.** The photos look like they were saved from Pinterest (736 px wide, mirror selfies, collages), not from Pexels or Unsplash as planned. Check before showing the site outside the team.
-- **Test data to undo:** SR-003's price was changed to ৳1,500 using `~/Documents/new/upload_test.csv`. Uploading `data/products_sample.csv` restores ৳1,850 and is the confirmation upload at the same time.
+- Confirmed live on Oct 12: all 10 new products were uploaded from the owner Products tab and trained, with `length_inches` in the Maira documents.
+- Two bugs were fixed on the way. The multipart field is `dataset_file` (the tutorial says `file`), checked by `tests/test_clients.py`. And training must wait until Maira has read the file (`upload_and_train()`).
+- **Still to do:** the expected answers in `docs/maira-tests.md` name the old ten products, so re-run them against the new catalogue.
+- **Photos:** all from Pexels or Unsplash since Oct 13 (`docs/photo-credits.md`). The old Pinterest ones were moved to `~/Documents/new/old_pinterest_photos/` and can be deleted.
+- **Check once in the Maira console:** SR-003 should show ৳1,850 again. It was set to ৳1,500 as a test using `~/Documents/new/upload_test.csv`, which can be deleted afterwards.
 
 ## Image preview: working
 
@@ -74,22 +73,15 @@ The local database got the new `maira_image_profile_id` column on Oct 11 with a 
 
 ## Git
 
-The last pushed commit was on October 6 (the Day 2 test sheet). The backend, frontend, docs, data and `.flaskenv` from October 7 may not be committed yet, so check `git status`. Suggested commits:
+Everything up to October 12 is committed and pushed (`main` matches `origin/main`, last commit `996f6e6`). The product photos in `data/images/` are deliberately not in Git (Maisha's decision, Oct 13; `.gitignore` skips them). They stay on this computer, so a fresh clone shows products without pictures until the photos are copied into that folder.
 
-```bash
-git add CLAUDE.md docs/ data/ .gitignore README.md && git commit -m "docs: add architecture guide, handoff notes and sample data"
-git add backend/ && git commit -m "feat: add Flask backend with chat, voice, pricing, orders and owner API"
-git add frontend/ && git commit -m "feat: add Vue storefront, chat widget and owner dashboard"
-git push
-```
-
-Before committing, check that `git status` doesn't list `backend/.env` or `backend/stylemate.db`.
+Before any commit, check that `git status` doesn't list `backend/.env` or `backend/stylemate.db`.
 
 ## Next steps, in order
 
-1. Confirm the five unchecked items under "Current state", starting with the CSV upload and the image profile.
-2. In the Maira console, update the stylist profile's Introduction and Instructions from `docs/maira-profile.md` (rule 5 for customization, rule 7 for ordering from the chat).
-3. Commit and push.
+1. In the Maira console, paste the stylist profile's Instructions text from `docs/maira-profile.md` (the old text says "I can't place orders"), and check that rule 8 is in the Introduction.
+2. Try in the browser: a chat answer, a follow-up ("Do you have an office dress?", then "Does it come in XXL?"), an order from the chat through to checkout, a made-to-measure hand-off (rule 8), a voice question, and a preview with a customer photo.
+3. Upload `data/products_sample.csv` from the owner Products tab so Maira knows the 16 new products, then re-run `docs/maira-tests.md`. Keep adding photos towards 40 products.
 4. Learn the code: follow the reading order at the end of `docs/architecture.md`.
 5. **Week 2 (Oct 12-18):**
    - Product photos: pick each photo first, then make the product row match it. Save as `data/images/<product_id>.jpg`, about 800 px wide and under 200 KB, from Pexels or Unsplash (not Unsplash+, no logos, not BlueChic).
