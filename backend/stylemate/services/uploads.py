@@ -1,8 +1,9 @@
-"""Pictures customers upload: checking them, and keeping reference pictures for the tailor.
+"""Pictures customers upload: checking them and keeping them where only the owner can open them.
 
-A reference picture is uploaded as soon as the customer chooses it, because the
-shopping bag lives in the browser and can't hold a file. The upload returns a random
-name; the order then carries that name. Only the shop's owner can open the picture.
+Two kinds are kept: a reference picture for the tailor, and a photo sent with a Help
+page message (for example a wrong size being measured). A reference picture is uploaded
+as soon as the customer chooses it, because the shopping bag lives in the browser and
+can't hold a file. The upload returns a random name; the order then carries that name.
 """
 
 import re
@@ -25,8 +26,8 @@ def check_picture(mimetype: str, content: bytes) -> None:
         raise UserInputError("That photo is too large (4 MB maximum).")
 
 
-def save_reference_picture(folder: str, mimetype: str, content: bytes) -> str:
-    """Save a picture for the tailor and return its new, random file name."""
+def save_picture(folder: str, mimetype: str, content: bytes) -> str:
+    """Save a customer's picture and return its new, random file name."""
     check_picture(mimetype, content)
     name = f"{uuid.uuid4().hex}{PICTURE_TYPES[mimetype]}"  # never the customer's own file name
     Path(folder).mkdir(parents=True, exist_ok=True)
@@ -34,5 +35,5 @@ def save_reference_picture(folder: str, mimetype: str, content: bytes) -> str:
     return name
 
 
-def reference_picture_exists(folder: str, name: str) -> bool:
+def picture_exists(folder: str, name: str) -> bool:
     return bool(SAVED_NAME.match(name or "")) and (Path(folder) / name).is_file()

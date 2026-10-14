@@ -1,5 +1,7 @@
 """The Help page: questions and answers, contact details, and messages to the owner."""
 
+import io
+
 from stylemate.extensions import db
 from stylemate.models import ContactMessage, Tenant
 
@@ -28,6 +30,44 @@ def test_message_without_a_way_to_reply_is_refused(client):
     assert response.status_code == 400
     assert "phone number or email" in response.get_json()["error"]
     assert db.session.scalar(db.select(ContactMessage)) is None
+
+
+def photo_form(**changes):
+    return {**MESSAGE, "picture": (io.BytesIO(b"photo of a measuring tape"), "wrong size.jpg", "image/jpeg"), **changes}
+
+
+def test_message_can_carry_a_photo_that_only_the_owner_can_open(app, client, owner_client):
+    assert client.post("/api/contact", data=photo_form(), content_type="multipart/form-data").status_code == 201
+
+    message = owner_client.get("/api/owner/messages").get_json()[0]
+    assert message["has_picture"] is True and message["message"] == "Do you deliver to Sylhet?"
+    picture = owner_client.get(f"/api/owner/messages/{message['id']}/picture")
+    assert picture.data == b"photo of a measuring tape"
+    # Saved under a random name, never the customer's own file name
+    assert db.session.scalar(db.select(ContactMessage.picture)) != "wrong size.jpg"
+
+    owner_client.post("/api/owner/logout")
+    assert client.get(f"/api/owner/messages/{message['id']}/picture").status_code == 401
+
+
+def test_a_file_that_is_not_a_photo_is_refused_and_not_counted(app, client):
+    app.config["CONTACT_MESSAGES_PER_DAY"] = 1
+    wrong = photo_form(picture=(io.BytesIO(b"%PDF"), "bill.pdf", "application/pdf"))
+
+    response = client.post("/api/contact", data=wrong, content_type="multipart/form-data")
+
+    assert response.status_code == 400
+    assert "JPG, PNG or WebP" in response.get_json()["error"]
+    assert db.session.scalar(db.select(ContactMessage)) is None
+    assert client.post("/api/contact", json=MESSAGE).status_code == 201  # today's one message is still available
+
+
+def test_a_message_without_a_photo_has_none_to_open(client, owner_client):
+    client.post("/api/contact", json=MESSAGE)
+    message = owner_client.get("/api/owner/messages").get_json()[0]
+
+    assert message["has_picture"] is False
+    assert owner_client.get(f"/api/owner/messages/{message['id']}/picture").status_code == 400
 
 
 def test_messages_need_the_owner_login(client):

@@ -50,8 +50,9 @@ def check_message(name, contact, message) -> tuple[str, str, str]:
     return name, contact, message
 
 
-def save_message(tenant: Tenant, name: str, contact: str, message: str) -> ContactMessage:
-    saved = ContactMessage(tenant_id=tenant.id, name=name, contact=contact, message=message)
+def save_message(tenant: Tenant, name: str, contact: str, message: str, picture: str = "") -> ContactMessage:
+    """`picture` is the saved file name of an attached photo (see services/uploads.py), or ""."""
+    saved = ContactMessage(tenant_id=tenant.id, name=name, contact=contact, message=message, picture=picture)
     db.session.add(saved)
     db.session.commit()
     return saved
@@ -63,6 +64,16 @@ def messages(tenant: Tenant) -> list[ContactMessage]:
         db.select(ContactMessage).where(ContactMessage.tenant_id == tenant.id)
         .order_by(ContactMessage.created_at.desc(), ContactMessage.id.desc())
     ).all()
+
+
+def message_picture_name(tenant: Tenant, message_id: int) -> str:
+    """The file name of a message's photo, for this shop's owner only."""
+    message = db.session.scalar(
+        db.select(ContactMessage).where(ContactMessage.tenant_id == tenant.id, ContactMessage.id == message_id)
+    )
+    if message is None or not message.picture:
+        raise UserInputError("That message has no photo.")
+    return message.picture
 
 
 def help_documents(tenant: Tenant) -> list[dict]:

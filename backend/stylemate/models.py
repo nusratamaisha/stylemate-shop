@@ -1,7 +1,7 @@
 """Database tables.
 
 Every table has a tenant_id, so one StyleMate installation can serve many shops.
-Today there is one shop (The House of "M"); adding another is a new Tenant row.
+Today there is one shop (Closet Corner); adding another is a new Tenant row.
 """
 
 from datetime import date, datetime, timezone
@@ -41,6 +41,10 @@ class Tenant(db.Model):
     contact_email: Mapped[str] = mapped_column(String(200), default="")
     contact_address: Mapped[str] = mapped_column(String(300), default="")
     contact_hours: Mapped[str] = mapped_column(String(200), default="")
+    # Where customers send money. A wallet with no number isn't offered at checkout.
+    bkash_number: Mapped[str] = mapped_column(String(20), default="")
+    nagad_number: Mapped[str] = mapped_column(String(20), default="")
+    rocket_number: Mapped[str] = mapped_column(String(20), default="")
 
 
 class User(db.Model):
@@ -213,11 +217,12 @@ class ContactMessage(db.Model):
     name: Mapped[str] = mapped_column(String(120))
     contact: Mapped[str] = mapped_column(String(200))  # the phone number or email to reply to
     message: Mapped[str] = mapped_column(Text)
+    picture: Mapped[str] = mapped_column(String(60), default="")  # an optional photo, e.g. of a wrong size being measured
     created_at: Mapped[datetime] = mapped_column(default=utc_now)
 
     def to_dict(self) -> dict:
-        return {"id": self.id, "name": self.name, "contact": self.contact,
-                "message": self.message, "sent_at": self.created_at.isoformat()}
+        return {"id": self.id, "name": self.name, "contact": self.contact, "message": self.message,
+                "has_picture": bool(self.picture), "sent_at": self.created_at.isoformat()}
 
 
 class RateLimitEvent(db.Model):
@@ -262,7 +267,10 @@ class ChatTurn(db.Model):
 
 
 class Order(db.Model):
-    """A checkout (no real payment)."""
+    """A checkout. No money moves through this app: see services/payments.py."""
+
+    PAYMENT_METHODS = {"cash_on_delivery": "Cash on delivery", "bkash": "bKash", "nagad": "Nagad", "rocket": "Rocket"}
+    PAYMENT_STATUSES = ("unpaid", "to_check", "paid")
 
     id: Mapped[int] = mapped_column(primary_key=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenant.id"))
@@ -273,6 +281,9 @@ class Order(db.Model):
     delivery_area: Mapped[str] = mapped_column(String(20), default="")  # "inside_dhaka" or "outside_dhaka"
     shipping_bdt: Mapped[int] = mapped_column(default=0)
     total_bdt: Mapped[int]  # items plus shipping
+    payment_method: Mapped[str] = mapped_column(String(20), default="cash_on_delivery")
+    payment_reference: Mapped[str] = mapped_column(String(40), default="")  # the wallet's transaction ID (TrxID)
+    payment_status: Mapped[str] = mapped_column(String(20), default="unpaid")
     created_at: Mapped[datetime] = mapped_column(default=utc_now)
 
     items: Mapped[list["OrderItem"]] = relationship(back_populates="order")
@@ -285,6 +296,10 @@ class Order(db.Model):
             "subtotal_bdt": self.total_bdt - self.shipping_bdt,
             "shipping_bdt": self.shipping_bdt,
             "total_bdt": self.total_bdt,
+            "payment_method": self.payment_method,
+            "payment_label": self.PAYMENT_METHODS.get(self.payment_method, self.payment_method),
+            "payment_reference": self.payment_reference,
+            "payment_status": self.payment_status,
             "items": [item.to_dict() for item in self.items],
         }
 

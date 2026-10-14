@@ -4,7 +4,7 @@ from flask import Blueprint, current_app, g, jsonify, request, send_from_directo
 
 from ..extensions import db
 from ..models import User
-from ..services import catalog, help, insights, orders
+from ..services import catalog, help, insights, orders, payments
 from .helpers import error, json_body, owner_required, services
 
 bp = Blueprint("owner", __name__, url_prefix="/api/owner")
@@ -46,6 +46,14 @@ def all_orders():
     return jsonify({"summary": orders.sales_summary(g.tenant), "orders": orders.all_orders(g.tenant)})
 
 
+@bp.patch("/orders/<int:order_id>/payment")
+@owner_required
+def update_payment(order_id: int):
+    """The owner has checked the wallet (or collected the cash) and records the result."""
+    order = payments.set_payment_status(g.tenant, order_id, str(json_body().get("status") or ""))
+    return jsonify({"order_id": order.id, "payment_status": order.payment_status})
+
+
 @bp.get("/custom-orders")
 @owner_required
 def custom_orders():
@@ -72,6 +80,14 @@ def reference_picture(item_id: int):
 @owner_required
 def customer_messages():
     return jsonify([message.to_dict() for message in help.messages(g.tenant)])
+
+
+@bp.get("/messages/<int:message_id>/picture")
+@owner_required
+def message_picture(message_id: int):
+    """The photo a customer sent with a message. Only the owner of that shop can open it."""
+    name = help.message_picture_name(g.tenant, message_id)
+    return send_from_directory(current_app.config["UPLOADS_DIR"], name)
 
 
 @bp.get("/products")

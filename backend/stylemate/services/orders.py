@@ -10,14 +10,15 @@ from ..errors import UserInputError
 from ..extensions import db
 from ..models import Customer, Order, OrderItem, Product, Tenant
 from .catalog import get_product
-from .uploads import reference_picture_exists
+from .payments import check_payment
+from .uploads import picture_exists
 from .pricing import MADE_TO_MEASURE_SIZE, clean_measurements, measurements_text, quote_for, shipping_charge
 
 MAX_QUANTITY = 10
 
 
 def place_order(tenant: Tenant, customer: dict, items: list[dict], account: Customer | None = None,
-                uploads_dir: str = "") -> Order:
+                uploads_dir: str = "", payment: dict | None = None) -> Order:
     """Check and save an order. `account` is the logged-in customer, or None for a guest checkout."""
     customer = customer or {}
     name, phone, address = (str(customer.get(key) or "").strip() for key in ("name", "phone", "address"))
@@ -27,10 +28,12 @@ def place_order(tenant: Tenant, customer: dict, items: list[dict], account: Cust
         raise UserInputError("Your cart is empty.")
     area = str(customer.get("delivery_area") or "")
     shipping = shipping_charge(tenant, area)  # the customer picks the area; Flask sets the charge
+    method, reference, payment_status = check_payment(tenant, payment)
 
     order = Order(tenant_id=tenant.id, customer_id=account.id if account else None,
                   customer_name=name, phone=phone, address=address,
-                  delivery_area=area, shipping_bdt=shipping, total_bdt=0)
+                  delivery_area=area, shipping_bdt=shipping, total_bdt=0,
+                  payment_method=method, payment_reference=reference, payment_status=payment_status)
     for item in items:
         order.items.append(_build_item(tenant, item, uploads_dir))
     _take_from_stock(order.items)
@@ -66,7 +69,7 @@ def _build_item(tenant: Tenant, item: dict, uploads_dir: str = "") -> OrderItem:
 
     # A reference picture only goes with a made-to-order piece, and only if it really was uploaded here
     picture = str(item.get("reference_image") or "")
-    if not (quote.is_custom and reference_picture_exists(uploads_dir, picture)):
+    if not (quote.is_custom and picture_exists(uploads_dir, picture)):
         picture = ""
 
     return OrderItem(
@@ -144,6 +147,7 @@ def sales_summary(tenant: Tenant) -> dict:
         "delivery_bdt": sum(order.shipping_bdt for order in orders),  # collected for delivery, not income
         "average_order_bdt": round(goods / len(orders)) if orders else 0,
         "to_ship": sum(1 for line in lines if line.status != "shipped"),
+        "payments_to_check": sum(1 for order in orders if order.payment_status == "to_check"),
         "best_sellers": [{"name": name, "quantity": quantity} for name, quantity in best],
     }
 

@@ -3,7 +3,7 @@
 from flask import Blueprint, current_app, jsonify, request, send_from_directory
 
 from ..clients import ReferenceImage
-from ..services import accounts, catalog, help, limits, orders, pricing, sizes, uploads
+from ..services import accounts, catalog, help, limits, orders, payments, pricing, sizes, uploads
 from .helpers import current_customer, current_tenant, error, json_body, sender_key, services
 
 bp = Blueprint("shop", __name__, url_prefix="/api")
@@ -19,6 +19,7 @@ def shop_info():
         "name": tenant.name,
         "tagline": tenant.tagline,
         "shipping": pricing.shipping_options(tenant),
+        "payment": payments.payment_options(tenant),
         "categories": sorted({product.category for product in products}),
         "occasions": sorted({occasion for product in products for occasion in product.to_dict()["occasions"]}),
     })
@@ -73,13 +74,19 @@ def help_page():
 
 @bp.post("/contact")
 def contact():
-    body = json_body()
+    """A message to the owner, with an optional photo (sent as a form when there is one)."""
+    body = request.form if request.form else json_body()
     tenant = current_tenant()
-    # Check the message first, so a mistyped form doesn't use up one of the day's messages
+    photo = request.files.get("picture")
+    content = photo.read() if photo else b""
+    # Check everything first, so a mistyped form or a wrong file doesn't use up one of the day's messages
     message = help.check_message(body.get("name"), body.get("contact"), body.get("message"))
+    if photo:
+        uploads.check_picture(photo.mimetype or "", content)
     limits.use(tenant, "contact", sender_key(), current_app.config["CONTACT_MESSAGES_PER_DAY"],
                "You've sent several messages today. Please call or email us instead.")
-    help.save_message(tenant, *message)
+    picture = uploads.save_picture(current_app.config["UPLOADS_DIR"], photo.mimetype, content) if photo else ""
+    help.save_message(tenant, *message, picture=picture)
     return jsonify({"ok": True}), 201
 
 
@@ -136,7 +143,7 @@ def upload_reference_picture():
     uploads.check_picture(picture.mimetype or "", content)  # before counting, so a wrong file isn't counted
     limits.use(current_tenant(), "reference_picture", sender_key(), current_app.config["REFERENCE_PICTURES_PER_DAY"],
                "You've uploaded many pictures today. Please describe it in your notes instead.")
-    name = uploads.save_reference_picture(current_app.config["UPLOADS_DIR"], picture.mimetype, content)
+    name = uploads.save_picture(current_app.config["UPLOADS_DIR"], picture.mimetype, content)
     return jsonify({"reference_image": name}), 201
 
 

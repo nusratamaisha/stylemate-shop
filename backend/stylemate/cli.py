@@ -13,20 +13,27 @@ from .services.catalog import parse_products_csv, save_products
 
 SHOP = {
     "slug": "house-of-m",
-    "name": 'The House of "M"',
+    "name": "Closet Corner",
     "tagline": "Everyday elegance, made to fit you.",
     "custom_base_days": 7,
     "shipping_inside_dhaka_bdt": 80,
     "shipping_outside_dhaka_bdt": 150,
     # Sample contact details: replace with the shop's own
     "contact_phone": "+880 1700-000000",
-    "contact_email": "hello@houseofm.example",
+    "contact_email": "hello@closetcorner.example",
     "contact_address": "House 12, Road 5, Dhanmondi, Dhaka 1205",
     "contact_hours": "Saturday to Thursday, 10 am to 8 pm",
+    # Sample wallet numbers: replace with the shop's own, or customers send money to a stranger
+    "bkash_number": "01700-000000",
+    "nagad_number": "01700-000000",
+    "rocket_number": "01700-000000",
 }
-CONTACT_FIELDS = ["contact_phone", "contact_email", "contact_address", "contact_hours"]
+# Details a shop created earlier may not have yet; seed fills in the empty ones
+CONTACT_FIELDS = ["contact_phone", "contact_email", "contact_address", "contact_hours",
+                  "bkash_number", "nagad_number", "rocket_number"]
 
-# (question, answer). Sample policies: replace with the shop's own before going live.
+# (question, answer). Returns, parcel checks, delivery charges and payment methods are the shop's
+# own rules (Oct 13); delivery times are still sample text.
 DEFAULT_FAQ = [
     ("How do I choose my size?",
      "Open the Size guide from the top menu, or tap \"Size guide\" beside the sizes on any product page. "
@@ -40,14 +47,20 @@ DEFAULT_FAQ = [
     ("What is the picture preview?",
      "On some pieces, \"See it first\" draws a picture of the piece with your changes, and on you if you add your photo. "
      "It is drawn by AI as a guide only, so the finished piece may look different. Your photo is not saved by the shop."),
+    ("What should I check when my parcel arrives?",
+     "Please open the parcel and check everything fully while the delivery person is still with you. "
+     "Once the delivery person has left, we can't accept a claim for a tear or a stain."),
     ("Can I return or exchange an order?",
-     "Ready-made pieces can be exchanged within 7 days if they are unworn and still have their tags. "
-     "Customized pieces are made for you, so they can't be returned or exchanged unless we made a mistake."),
+     "No, we don't offer returns or exchanges. If we sent you the wrong size, measure the piece with a "
+     "measuring tape and send us a photo of the measurement, using the message form on this page. "
+     "We will sort it out for you."),
     ("Where do you deliver, and how long does it take?",
      "We deliver across Bangladesh. Delivery costs ৳80 inside Dhaka and ৳150 anywhere outside Dhaka, per order. "
      "Ready-made pieces usually arrive in 2 to 3 days inside Dhaka and 3 to 5 days elsewhere."),
     ("How do I pay?",
-     "You pay cash on delivery. Online payment is not available yet."),
+     "You can pay cash on delivery, or by bKash, Nagad or Rocket. For a wallet payment, send the order total "
+     "to the number shown at checkout and enter the transaction ID (TrxID) from the confirmation message. "
+     "We confirm the order once we have seen the payment."),
     ("Can the stylist chat answer everything?",
      "The stylist answers only from this shop's catalogue, so it won't guess. For anything it can't answer, "
      "send us a message from this page."),
@@ -111,7 +124,7 @@ def sync_help() -> None:
 @click.option("--products", "products_csv", default=str(DATA_DIR / "products_sample.csv"),
               show_default=True, help="CSV of products to load into the database.")
 def seed(owner_email: str, owner_password: str, products_csv: str) -> None:
-    """Set up The House of "M": shop, customization options, products and owner login.
+    """Set up Closet Corner: shop, customization options, products and owner login.
 
     Safe to run again: it updates what already exists.
     """
