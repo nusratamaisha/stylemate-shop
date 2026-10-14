@@ -8,6 +8,8 @@ import { useBag } from './stores/bag.js'
 import { useShop } from './stores/shop.js'
 
 const shop = useShop()
+// The name comes from the shop's row in the database, so another shop needs no code change.
+const shopName = computed(() => shop.info?.name || 'Closet Corner')
 const bag = useBag()
 const account = useAccount()
 const route = useRoute()
@@ -23,9 +25,9 @@ const firstName = computed(() => {
   <a class="skip" href="#main">Skip to content</a>
   <header class="site-header">
     <div class="page bar">
-      <RouterLink to="/" class="brand" aria-label="The House of M, home">
-        <BrandMark size="1.9rem" />
-        <span class="brand-name">The House of “M”</span>
+      <RouterLink to="/" class="brand" :aria-label="`${shopName}, home`">
+        <BrandMark size="2.25rem" />
+        <span class="brand-name">{{ shopName }}</span>
       </RouterLink>
       <!-- The store's pages in the middle; the customer's own things (account, bag) apart on the right. -->
       <nav v-if="!isOwnerPage" class="nav store" aria-label="Main">
@@ -59,7 +61,7 @@ const firstName = computed(() => {
   <footer class="site-footer">
     <div class="page foot" :class="{ 'with-chat': !isOwnerPage }">
       <p>
-        <strong>The House of “M”</strong><br />
+        <strong>{{ shopName }}</strong><br />
         Everyday elegance, made to fit you. Delivery across Bangladesh.
       </p>
       <p v-if="!isOwnerPage" class="small muted">
@@ -108,7 +110,7 @@ const firstName = computed(() => {
 .brand-name {
   font-family: var(--font-display);
   font-size: 1.25rem;
-  font-weight: 500;
+  font-weight: 600;
 }
 .nav {
   display: flex;

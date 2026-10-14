@@ -20,7 +20,7 @@ const heroPieces = computed(() => {
   <section class="hero">
     <div class="page hero-inner">
       <div class="hero-text">
-        <span class="eyebrow">The House of “M”</span>
+        <span class="eyebrow">{{ shop.info?.name || 'Closet Corner' }}</span>
         <h1>{{ shop.info?.tagline || 'Everyday elegance, made to fit you.' }}</h1>
         <p class="lead">
           Flowing maxis, easy tunics and everyday skirts, made to fit you.

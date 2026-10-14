@@ -1,4 +1,4 @@
-/* The House of "M": design tokens and base styles.
+/* Closet Corner: design tokens and base styles.
    Colours are taken from the clothes themselves: sindoor maroon, block-print indigo,
    haldi mustard, on a clean white page so the products carry the colour. */
 
@@ -17,8 +17,10 @@
   --ok: #2d6a4f;
   --danger: #a3242c;
 
-  --font-display: 'Bodoni Moda', Didot, 'Bodoni 72', Georgia, serif;
-  --font-body: 'Hind Siliguri', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  /* Two plain sans-serifs, chosen to be easy to read at every size. Hind Siliguri stays
+     in both lists so Bangla text (the stylist replies in the customer's language) has letters. */
+  --font-display: 'Poppins', 'Hind Siliguri', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-body: 'Inter', 'Hind Siliguri', system-ui, -apple-system, 'Segoe UI', sans-serif;
 
   --step--1: 0.875rem;
   --step-0: 1rem;
@@ -58,8 +60,8 @@ h1,
 h2,
 h3 {
   font-family: var(--font-display);
-  font-weight: 500;
-  line-height: 1.15;
+  font-weight: 600;
+  line-height: 1.2;
   margin: 0 0 0.5em;
   letter-spacing: -0.01em;
 }
