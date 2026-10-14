@@ -153,13 +153,14 @@ def upload_reference_picture():
 def create_order():
     body = json_body()
     order = orders.place_order(current_tenant(), body.get("customer"), body.get("items") or [],
-                               account=current_customer(), uploads_dir=current_app.config["UPLOADS_DIR"])
+                               account=current_customer(), uploads_dir=current_app.config["UPLOADS_DIR"],
+                               payment=body.get("payment"))
     return jsonify({**order.to_dict(), "customer_order_number": accounts.order_number(order)}), 201
 
 
 @bp.get("/images/<path:filename>")
 def product_image(filename: str):
-    return send_from_directory(current_app.config["IMAGES_DIR"], filename, max_age=3600)
+    return send_from_directory(current_app.config["IMAGES_DIR"], filename, max_age=60)
 
 
 def _visitor_id(value) -> str:
