@@ -1,6 +1,6 @@
 # How StyleMate Works
 
-StyleMate is an AI shopping assistant for online clothing shops. The House of "M" is the first shop on it. This guide explains how the pieces fit together, so you can find your way around the code and explain it in your presentation.
+StyleMate is an AI shopping assistant for online clothing shops. Closet Corner is the first shop on it (it was called The House of "M" until October 13, 2026, which is why its internal ID is still `house-of-m`). This guide explains how the pieces fit together, so you can find your way around the code and explain it in your presentation.
 
 ## 1. The big picture
 
@@ -50,7 +50,8 @@ Each file has one job. If you know what you want to change, this table tells you
 | `services/reviews.py` | Product reviews, allowed only for a customer who ordered the piece |
 | `services/help.py` | The Help page: questions and answers, contact details, saving customers' messages, and sending the answers to Maira |
 | `services/limits.py` | Daily limits per visitor for contact messages and picture previews |
-| `services/uploads.py` | Checks uploaded pictures and keeps customers' reference pictures for the tailor |
+| `services/uploads.py` | Checks uploaded pictures and keeps customers' pictures (for the tailor, or sent with a message) where only the owner can open them |
+| `services/payments.py` | How an order is paid: cash on delivery, or a bKash, Nagad or Rocket transaction ID that the owner checks |
 | `services/sizes.py` | The size guide: what body each size fits, and how long each kind of sleeve is |
 | `services/preview.py` | Image preview: checks the request, writes the prompt, asks Maira for the picture |
 | `services/orders.py` | Checkout and the custom order queue |
@@ -160,7 +161,15 @@ Both columns are optional. A product without them keeps the full menu and simply
 
 The two charges are fields on the shop's `Tenant` row, so another shop can charge differently without a code change. The customer chooses the area themselves; the address is free text, so Flask can't check that it matches.
 
-There is no payment. It's a demo checkout.
+**Paying.** The customer chooses cash on delivery, bKash, Nagad or Rocket. The list comes from `GET /api/shop`, built by `services/payments.py` from three wallet numbers on the shop's `Tenant` row; a wallet without a number isn't offered.
+
+1. For a wallet, `BagView.vue` shows the shop's number and the total, and asks for the **transaction ID (TrxID)** from the wallet's confirmation message. The customer sends the money in their own wallet app.
+2. `payments.check_payment()` tidies the ID (no spaces, capitals), refuses one that isn't 6 to 20 letters and numbers, and refuses one already used for another order of this shop. The order is saved with `payment_status` `to_check`. A cash order is `unpaid`.
+3. In the dashboard's **Orders** tab the owner sees the method and the TrxID, compares it with the wallet's history, and presses "Mark as paid" (`PATCH /api/owner/orders/<id>/payment`). A number at the top counts the payments still to check.
+
+**No money moves through this app, and there is no payment gateway.** A gateway (bKash Checkout, Nagad, or an aggregator such as SSLCommerz) needs a registered merchant account with business documents, and approval takes longer than this project. Sending money and quoting the TrxID is how many small online shops in Bangladesh really take wallet payments, so this is the shop's real process, not a mock. If the shop gets a merchant account, only `payments.py` changes: `check_payment()` would ask the provider instead of waiting for the owner.
+
+**What it can't do:** it can't tell a real TrxID from a made-up one. That is the owner's check, which is why a wallet order starts as `to_check` and not `paid`.
 
 ### E. The owner uploads products
 
@@ -183,13 +192,15 @@ For the **Customer questions** tab, `services/insights.py` reads the shop's `Cha
 
 ### G. A customer previews a dress as a picture
 
-This covers two wishes with one flow: "show me this dress with my changes" and "show me wearing it".
+This covers two wishes with one flow. "Show me this dress with my changes" draws **the piece on its own, with no person and no face**. "Show me wearing it" (the customer adds a photo) draws **the size they chose on their real body**. Both rules came from the mentor review on October 13.
 
 1. `GET /api/products/SR-002` includes `preview_available`. It is true only when the shop has an image profile, so `ProductView.vue` shows `PreviewPanel.vue` only then.
 2. The panel sends `POST /api/products/SR-002/preview` as a form: the colour, the option IDs chosen in "Make it yours", an optional typed idea (up to 200 characters), and an optional photo of the customer.
 3. `services/preview.py` refuses bad requests **before** any paid call: no image profile, an idea for a dress that can't be customized, a colour the dress doesn't come in, a file that isn't a JPG, PNG or WebP under 4 MB, or nothing to show at all.
 4. The option IDs go through `pricing.quote_for()`, the same function that prices the order. So the picture can only show options the shop really sells, one per group, and the words in the prompt ("Sleeves: Short sleeves") are the same words the order will carry.
-5. `build_prompt()` writes the instruction from the product's own data (name, category, colour, fabric, description), then the changes, then the typed idea.
+5. `build_prompt()` writes the instruction from the product's own data (name, category, colour, fabric, description), then the changes, then the typed idea. Without a customer photo it asks for a product photo of the garment alone and forbids a person, face, hands or body: an invented model would distract from the changes and could look like a real person.
+   - **With a customer photo, the fit is added.** `fit_description()` takes the size chosen on the page and looks it up in the shop's size guide, so the prompt says, for example, "size M, cut for a bust of 36 inches, a waist of 30 inches and a hip of 39 inches", and tells the model to show that size honestly: tight if too small, loose if too large, never reshaping the person. A try-on without a size is refused before the paid call. A made-to-measure piece has no S, M or L, so the prompt gives the customer's own measurements and says it fits exactly.
+   - **What this can't promise:** the image model sees a photo, not a tape measure, so the fit in the picture is an impression, not a measurement. The caption already says the finished piece may look different.
 6. Reference pictures go along with the prompt: the customer's photo first, then the shop's photo of the dress if `data/images/` has one. The prompt says which is which.
 7. `MairaClient.generate_image()` sends it to `/v1/maira/ask`, the same endpoint as chat. Maira draws instead of writing because the **image profile's model is an image model**. It waits up to 120 seconds, not the usual 30.
 8. Maira returns a link to the picture. The panel shows it with a note that it is AI-drawn and that the price above is what the customer pays.
@@ -215,8 +226,8 @@ This covers two wishes with one flow: "show me this dress with my changes" and "
 ### H. A customer needs help
 
 1. "Help" in the top menu opens `HelpView.vue`, which loads `GET /api/help`: the shop's questions and answers (`FaqItem` rows) and its contact details (four fields on the `Tenant` row).
-2. The contact form sends `POST /api/contact` with a name, a phone number or email, and a message. `services/help.py` refuses a message with no way to reply, then saves it as a `ContactMessage` row.
-3. The owner reads the messages in the dashboard's **Messages** tab (`GET /api/owner/messages`, owner login required) and replies by phone or email.
+2. The contact form sends `POST /api/contact` with a name, a phone number or email, a message and an **optional photo** (for example a wrong size laid flat with a measuring tape on it). `services/help.py` refuses a message with no way to reply, then saves it as a `ContactMessage` row. The photo is checked and saved by `services/uploads.py` under a random name in `backend/uploads/`, the same way as a reference picture for the tailor.
+3. The owner reads the messages in the dashboard's **Messages** tab (`GET /api/owner/messages`, owner login required), opens a photo with `GET /api/owner/messages/<id>/picture`, and replies by phone or email.
 
 4. **Daily limits.** One visitor can send 5 messages a day and ask for 20 picture previews a day (`CONTACT_MESSAGES_PER_DAY` and `PREVIEWS_PER_DAY` in `.env`; 0 switches a limit off). `services/limits.py` counts uses in a `RateLimitEvent` table and answers 429 when the limit is reached. A request refused for another reason (an empty name, a wrong file type) is not counted, and a preview is counted only just before the paid call. The visitor is recognised by a **hash of their IP address**: the browser's visitor ID would be useless here because anyone can clear it, and hashing means the address itself is never stored.
 5. **The assistant knows the same answers.** `uv run flask sync-help` turns the FAQ, the size guide and the contact details into question-and-answer rows and sends them to a second Maira dataset, `house-of-m-help`. It copies the product dataset's tag, and the chat profile searches by tag, so the assistant finds the new dataset with no change to the profile. Each row has a stable ID (`FAQ-2`, `SIZE-XL`), so running the command again replaces answers instead of duplicating them. Run it after changing the FAQ or size guide.
@@ -242,7 +253,7 @@ This covers two wishes with one flow: "show me this dress with my changes" and "
 | **Interface segregation** | `ChatService` needs only an object with `ask()`, and `PreviewService` only one with `generate_image()`. Neither knows about datasets or training. |
 | **Dependency inversion** | `create_app(maira=..., chorus=...)` lets tests pass in the fakes. The services receive their client; they never create it. |
 | **DRY** | Keys and headers: once, in `clients/base.py`. Errors into JSON: once, in `api/__init__.py`. Prices: only `pricing.py`, which the image preview also uses to check options. One CSV feeds both the database and Maira. |
-| **YAGNI** | No payment, no migrations tool, no per-product option menus, no image search. SQLite instead of a database server. Each would be added only when needed. |
+| **YAGNI** | No payment gateway (the owner checks transaction IDs by hand), no migrations tool, no per-product option menus, no image search. SQLite instead of a database server. Each would be added only when needed. |
 
 ## 6. Tests
 
@@ -252,7 +263,7 @@ Run them from `backend/`:
 uv run pytest
 ```
 
-There are 99 tests. They use the fake clients, so they need no keys, cost nothing and run in seconds. They cover response parsing (including the `detail` wrapper and string scores), Chorus polling and timeouts, pricing rules, checkout that ignores tampered prices, the unanswered flag, the owner login wall, CSV import errors, and the image preview (the prompt, the order of reference pictures, and every refusal).
+There are 114 tests. They use the fake clients, so they need no keys, cost nothing and run in seconds. They cover response parsing (including the `detail` wrapper and string scores), Chorus polling and timeouts, pricing rules, checkout that ignores tampered prices, the unanswered flag, the owner login wall, CSV import errors, and the image preview (the prompt, the order of reference pictures, and every refusal).
 
 ## 7. Known limits and next steps
 
@@ -275,7 +286,7 @@ There are 99 tests. They use the fake clients, so they need no keys, cost nothin
 | The size guide numbers are common starting values, not the shop's own, and the owner can't edit them from the dashboard | Replace the values in `cli.py` (`DEFAULT_SIZES`, `DEFAULT_SLEEVE_LENGTHS`) before seeding; add an owner screen if a second shop joins |
 | The assistant learns FAQ and size guide changes only when `flask sync-help` is run | Run it after every change; make it automatic if the owner gets an FAQ editor |
 | Daily limits count by IP address, so people sharing one connection share a limit, and during local development every visitor is 127.0.0.1 | Raise the limits in `.env` for a demo; behind a proxy, pass the visitor's real address through |
-| The FAQ answers and contact details are sample text (delivery times, exchange rules, cash on delivery, a made-up phone and address) | Replace them in `cli.py` (`DEFAULT_FAQ`, `SHOP`) with the shop's real ones |
+| The FAQ answers and contact details are partly sample text (delivery times, a made-up phone and address, and **made-up bKash, Nagad and Rocket numbers**). The return rule, the parcel check, the delivery charges and the payment methods are the shop's own since Oct 13 | Replace them in `cli.py` (`DEFAULT_FAQ`, `SHOP`) with the shop's real ones |
 | The owner can't edit the FAQ or mark messages as answered | Add when a real shop needs it |
 | A reference picture uploaded for a piece that is never ordered stays in `backend/uploads/` | Delete files older than a few days that no order points to |
 | Accounts have no password reset, no email confirmation and no limit on wrong password attempts | Needs an email service; add before real customers use it |

@@ -1,6 +1,6 @@
-# Maira Test Results: The House of M
+# Maira Test Results: Closet Corner (formerly The House of "M")
 
-Setup: own Maira project (Nusrat — Beta), dataset `house-of-m-products` (10 products, trained), stylist profile with strict mode, Hybrid search and Dataset Tags Includes `house-of-m`.
+Setup on Oct 6: own Maira project (Nusrat — Beta), dataset `house-of-m-products` (10 products, trained), stylist profile with strict mode, Hybrid search and Dataset Tags Includes `house-of-m`.
 
 Endpoint: `POST https://api.recommender.gigalogy.com/v1/maira/ask`
 
@@ -23,7 +23,32 @@ Request body for each test (change only `query`):
 - **Top score:** the highest `similarity_score` in `references`.
 - **Prompt tokens:** `usage.prompt_tokens`. Compare with 2,049 from the first test in the shared project.
 
-## Tests (Oct 6)
+## Tests for the current catalogue (written Oct 13, not yet run)
+
+The catalogue was replaced on Oct 13 with 26 products, SR-017 to SR-042, so the Oct 6 questions below name products that no longer exist. These are the same checks rewritten for the current products.
+
+Before running them:
+
+1. Upload `data/products_sample.csv` from the owner Products tab and wait for training.
+2. In the Maira console, delete the old documents `SR-001` to `SR-010` from the product dataset. An upload replaces and adds documents but never removes one, so without this step the assistant keeps recommending clothes the shop no longer has.
+3. Run `uv run flask sync-help` so the assistant knows the return and payment rules.
+
+Tests 10 and 11 check the order line from profile rule 7.
+
+| # | Question | Expected behaviour | Answer | Pass? | Top score | Prompt tokens |
+|---|---|---|---|---|---|---|
+| 1 | I'm going to a wedding next week. What do you have under 4,000 taka? | Recommends the **Shapla Three-Piece Set** (৳3,500, sizes S, M, L, XL), the only piece listed for wedding guests. May add a festive set such as the Jharna Embroidered Kurti Set (৳3,400). Invents nothing. | | | | |
+| 2 | Is the Akash shirt dress in stock? | Says the **Akash Striped Ruffle Shirt Dress is out of stock** and suggests another office piece, likely the **Mishti Check Kurti Dress** (৳1,750). | | | | |
+| 3 | What's good to wear in hot weather? | Suggests up to three cotton pieces, such as the **Nilima Bow-Print Flutter Top**, **Bokul Floral Collared Maxi Dress** or **Mishti Check Kurti Dress**, each with price and sizes. | | | | |
+| 4 | Do you sell shoes? | **Refuses to guess:** says the store doesn't sell shoes and names no made-up products. | | | | |
+| 5 | Dress in red color in size M | There is no plain red dress. Should offer the **Agni Ombre Tiered Maxi Dress** (orange shading into red, ৳2,950) or the **Dalim Ruffle-Sleeve Dress** (maroon, ৳1,900), saying what colour each really is. May mention the red Lali Lace Tiered Skirt, but must say it is a skirt. | | | | |
+| 6 | What is your return policy? | Answers from the Help page FAQ (the `house-of-m-help` dataset): no returns or exchanges; for a wrong size, measure the piece, send a photo and the shop sorts it out. On Oct 6 this was a refusal, because the FAQ wasn't in Maira yet. | | | | |
+| 7 | Can I get the Agni maxi with short sleeves? How much extra would it cost? | Says the **Agni Ombre Tiered Maxi Dress is customizable** and **quotes no price**. Ends with `[CUSTOMIZE product_id=SR-018; sleeves=Short; ...]` (rule 8). | | | | |
+| 10 | I'd like to order the Maya Gingham Tiered Dress in size M. | One short confirming sentence, then a last line `[ORDER product_id=SR-017; size=M; colour=Black and White Check; quantity=1]`. Asks for no name, phone or address. | | | | |
+| 11 | I'd like to order the Akash Striped Ruffle Shirt Dress in size L. | Says it is out of stock and writes **no** `[ORDER ...]` line. | | | | |
+| 12 | How can I pay? | Cash on delivery, or bKash, Nagad or Rocket with the transaction ID entered at checkout. Does not ask for a payment itself. | | | | |
+
+## Tests (Oct 6, the first ten-product catalogue)
 
 | # | Question | Expected behaviour | Answer | Pass? | Own data only? | Top score | Prompt tokens |
 |---|---|---|---|---|---|---|---|
@@ -54,7 +79,7 @@ Tests whether sending `session_id` back lets the assistant remember the conversa
 Checks that a shop's profile can't see another shop's data. This is the core of the multi-shop design.
 
 1. In Maira Datasets, create a dataset named `test-other-shop-products` with tag **`other-shop`** (not `house-of-m`) and ID column `product_id`. Upload `data/test_other_shop.csv` (one shoe product) and train it.
-2. Ask the House of M profile the question below.
+2. Ask the Closet Corner stylist profile the question below.
 3. Afterwards, delete the `test-other-shop-products` dataset.
 
 | # | Question | Expected | Answer | Pass? | Any `OS-001` in references? |
@@ -76,6 +101,6 @@ If it recommends the Trail Running Shoes, the tag filter isn't working, and shop
 - **A sturdier option for later:** profiles support `response_format: json_object`. The assistant could return `{"answer": "...", "answered": false}`, giving Flask a clear flag instead of guessing from scores or wording. Consider it in Week 3 or 4 if score thresholds prove unreliable.
 - **Customization rule held (test 7):** it confirmed the Shefali is customizable and quoted no price. Once the Week 4 customization panel exists, change rule 5 so it points customers to the panel instead of "contact the shop".
 - **Refusals are cheap and fast:** test 4 used only 17 completion tokens and 2.5 s.
-- **Shop name:** the brand is spelled The House of "M", with quotes around the M, on purpose.
+- **Shop name:** on Oct 6 the brand was The House of "M", with quotes around the M, which is why the recorded answers use it. It became Closet Corner on Oct 13.
 
 **Summary (Oct 6):** tests 1, 2, 3, 4, 6 and 7 passed. Strict mode held every time: no invented products, policies, delivery times or custom prices. Open: test 5 (voice text), test 8 (memory, moved to Day 3) and test 9 (tag filter, before the Week 2 mentor review).

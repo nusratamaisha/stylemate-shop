@@ -1,4 +1,4 @@
-# Maira Dataset: The House of M Products
+# Maira Dataset: Closet Corner Products
 
 How the product data is organized in Maira, and why. For a new shop, repeat this with that shop's name and tag.
 
@@ -16,10 +16,10 @@ How the product data is organized in Maira, and why. For a new shop, repeat this
 | `name` | `house-of-m-products` | Shop name plus content type, so each shop's datasets are easy to tell apart |
 | `description` | `Product catalog for The House of M (sample data)` | For humans browsing the console |
 | `idx_column` | `product_id` | Our own stable IDs. Re-uploading the CSV updates products instead of duplicating them. |
-| `is_idx_fillup_if_empty` | `false` | A row missing its ID should fail loudly. An auto-filled random ID would create a duplicate product on the next upload. |
+| `is_idx_fillup_if_empty` | `false` (the real dataset has `true`, which is harmless while every row has a `product_id`) | A row missing its ID should fail loudly. An auto-filled random ID would create a duplicate product on the next upload. |
 | `secondary_idx_column` | empty | Not needed |
 | `image_url_column` | empty | This setting is for Maira's image search, which needs public image URLs. Photo search is an optional extra (YAGNI). The `image` column still uploads as ordinary text. |
-| `tags` | `house-of-m` | The shop's tag. The stylist profile includes only this tag, so it can only search this shop's data. |
+| `tags` | `house_of_m` | The tag the real dataset carries (underscores, checked in the console on Oct 13). The profile's Includes tag must match it exactly. The shop's tag. The stylist profile includes only this tag, so it can only search this shop's data. |
 | `filterable_fields` | empty | The docs don't yet show how `ask` uses them (YAGNI). Adding them later only needs a payload update, not full retraining. |
 
 ## The CSV: `data/products_sample.csv`
@@ -63,7 +63,7 @@ In the console, use the dataset's Train button if it has one. The dataset should
 
 ## Future datasets (not now)
 
-When store policies are added in Week 3 (FAQ, shipping, exchanges), put them in a **separate dataset**, such as `house-of-m-policies`, with the same `house-of-m` tag. Products change often and policies rarely, so keeping them apart means re-uploading products can never touch the policies. The shared tag keeps both visible to the shop's profile.
+When store policies are added in Week 3 (FAQ, shipping, exchanges), put them in a **separate dataset**, such as `house-of-m-policies`, with the same `house_of_m` tag. Products change often and policies rarely, so keeping them apart means re-uploading products can never touch the policies. The shared tag keeps both visible to the shop's profile.
 
 ## IDs
 

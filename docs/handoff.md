@@ -29,7 +29,12 @@ Last updated: **October 13, 2026**. Update this file at the end of each working 
 | Oct 12 | Customers can attach a reference picture for the tailor to a made-to-order piece; only the owner can open it. 92 tests. |
 | Oct 12 | Owner dashboard: new Orders tab with sales numbers, best sellers and every order (ready-made and made to order), with a status per line. 95 tests. |
 | Oct 12 | Ordering a ready-made piece now lowers its stock; the owner can send today's stock to the assistant from the Products tab. 99 tests. |
-| Oct 13 | The ten Pinterest photos were replaced with 16 from Pexels and Unsplash (sources in `docs/photo-credits.md`), and `data/products_sample.csv` was rewritten as 16 products to match them. Loaded into the local database only: **Maira still has the old ten products**, so the assistant describes pieces the shop no longer shows until the new file is uploaded from the owner Products tab. Target is 40 products. |
+| Oct 14 | Permission from the Facebook shop page granted. Catalogue grown to **45 products** (16 dresses, 8 tops, 8 pants and skirts, 13 sets): 19 new photos added as SR-043 to SR-061 (originals in `~/Downloads/sample2`; one was a duplicate of SR-057 and was left out). Local database only: **upload `data/products_sample.csv` from the owner Products tab so the assistant knows them.** |
+| Oct 13 | Mentor feedback on image preview, both built: (1) a preview without a customer photo shows **only the garment, no person or face**; (2) a try-on with the customer's photo sends the **chosen size with its size-guide measurements** (or the made-to-measure numbers) and asks for an honest fit. A try-on now needs a size. 114 tests. **Not yet tried against the real image model**, and the picture profile's Introduction in the Maira console must be replaced from `docs/maira-profile.md` (the old text says "one person, standing", which contradicts rule 1). |
+| Oct 13 | **Shop renamed to Closet Corner**, with a new logo (a hanger with a gold corner, `BrandMark.vue` and `public/favicon.svg`) and clearer fonts (Poppins for headings, Inter for text, Hind Siliguri kept for Bangla). The header, footer and home page now read the name from the shop's `Tenant` row. Not renamed, on purpose: the slug `house-of-m`, the Maira tag `house_of_m`, the Maira dataset and profile names, the repo and the folder, because the assistant finds its data by that tag. **To do in the Maira console: paste the System and Instructions texts from `docs/maira-profile.md` into both profiles, or the assistant keeps calling the shop The House of "M".** |
+| Oct 13 | Payment at checkout: cash on delivery, or bKash, Nagad or Rocket by sending money to the shop's number and typing the transaction ID, which the owner checks and marks as paid in the Orders tab (no gateway; see journey D in `docs/architecture.md`). The Help page message form takes an optional photo, which the owner opens in the Messages tab. 110 tests. **The three wallet numbers are made up (`01700-000000`| Oct 13 | **Catalogue replaced: 26 products, SR-017 to SR-042** (6 dresses, 7 tops, 7 pants and skirts, 6 sets), all with flat-lay photos from one Facebook shop page. Permission was asked for on Oct 13; record the reply in `docs/photo-credits.md` before showing the site outside the team. The Pinterest photos, and a short-lived set of 16 Pexels/Unsplash products (SR-001 to SR-016), were removed; their IDs are not reused. Local database only: the 8 test orders and 1 review on the removed products were deleted with them (backup: `~/Documents/new/stylemate-backup-2026-10-13.db`). **Maira still has the old ten products.** SR-022 has stock 0 for the out-of-stock test. |
+): put the shop's real ones in `SHOP` in `cli.py` before anyone outside the team uses the site.** The local database got its new columns with a one-off `ALTER TABLE`. |
+| Oct 13 | Help page FAQ now has the shop's own rules: check the parcel in front of the delivery person, no returns or exchanges, a wrong size is fixed after a measured photo. Delivery charges confirmed (৳80 / ৳150). Local only: **run `uv run flask sync-help` so the assistant knows them**. Delivery times, payment and contact details are still sample text. |
 | Oct 7-8 | Local setup done: `.env` filled, `.flaskenv` added, `flask seed` run, both servers running. A wrong API key in `.env` (401 "Project credential not found") was fixed. |
 
 ## Current state
@@ -54,14 +59,15 @@ Not yet confirmed against the real APIs:
 - Confirmed live on Oct 12: all 10 new products were uploaded from the owner Products tab and trained, with `length_inches` in the Maira documents.
 - Two bugs were fixed on the way. The multipart field is `dataset_file` (the tutorial says `file`), checked by `tests/test_clients.py`. And training must wait until Maira has read the file (`upload_and_train()`).
 - **Still to do:** the expected answers in `docs/maira-tests.md` name the old ten products, so re-run them against the new catalogue.
-- **Photos:** all from Pexels or Unsplash since Oct 13 (`docs/photo-credits.md`). The old Pinterest ones were moved to `~/Documents/new/old_pinterest_photos/` and can be deleted.
-- **Check once in the Maira console:** SR-003 should show ৳1,850 again. It was set to ৳1,500 as a test using `~/Documents/new/upload_test.csv`, which can be deleted afterwards.
+- **Photos:** all from one Facebook shop page since Oct 13, permission pending (`docs/photo-credits.md`). Removed photos are in `~/Documents/new/old_pinterest_photos/` and `~/Documents/new/removed_stock_photos/`; both folders can be deleted.
+- **Old documents stay in Maira.** An upload replaces and adds documents but never removes one, so `SR-001` to `SR-010` must be deleted from the product dataset in the Maira console, or the assistant keeps recommending clothes the shop no longer has.
+- `~/Documents/new/upload_test.csv` was a one-off price test for the old SR-003 and can be deleted.
 
 ## Image preview: working
 
 The panel stays hidden until the shop has an image profile. How it was switched on (repeat for a new shop or a fresh clone):
 
-1. In the Maira console, create a second profile (for example `The House of "M" pictures`) with an image model such as `gpt-image-2`. It needs no dataset tags.
+1. In the Maira console, create a second profile (for example `Closet Corner pictures`) with an image model such as `gpt-image-2`. It needs no dataset tags.
 2. Add `MAIRA_IMAGE_PROFILE_ID=<its ID>` to `backend/.env`.
 3. From `backend/`, run `uv run flask seed` again. It is safe to repeat and copies the ID onto the shop's row.
 4. Restart Flask, open a customizable product, choose a change and press "Show me".
@@ -81,15 +87,15 @@ Before any commit, check that `git status` doesn't list `backend/.env` or `backe
 
 1. In the Maira console, paste the stylist profile's Instructions text from `docs/maira-profile.md` (the old text says "I can't place orders"), and check that rule 8 is in the Introduction.
 2. Try in the browser: a chat answer, a follow-up ("Do you have an office dress?", then "Does it come in XXL?"), an order from the chat through to checkout, a made-to-measure hand-off (rule 8), a voice question, and a preview with a customer photo.
-3. Upload `data/products_sample.csv` from the owner Products tab so Maira knows the 16 new products, then re-run `docs/maira-tests.md`. Keep adding photos towards 40 products.
+3. Upload `data/products_sample.csv` (26 products) from the owner Products tab, delete the old documents `SR-001` to `SR-010` in the Maira console, run `uv run flask sync-help`, re-paste the profile Introduction from `docs/maira-profile.md` (its example ID is now SR-018), then run the test sheet in `docs/maira-tests.md`.
 4. Learn the code: follow the reading order at the end of `docs/architecture.md`.
 5. **Week 2 (Oct 12-18):**
    - Product photos: pick each photo first, then make the product row match it. Save as `data/images/<product_id>.jpg`, about 800 px wide and under 200 KB, from Pexels or Unsplash (not Unsplash+, no logos, not BlueChic).
-   - Grow the catalogue to 40-60 products, uploaded through the owner Products tab.
+   - ~~Grow the catalogue to 40-60 products~~ Done Oct 14: 45 products (local; upload to Maira still to do).
    - Test 9 in `docs/maira-tests.md`: a decoy `other-shop` dataset with a shoe, which proves one shop can't see another's data.
    - Show the mentor the working app.
 6. **Week 3 (Oct 19-25):**
-   - ~~A policies dataset~~ Done Oct 11 as `house-of-m-help` (`flask sync-help`). Still to do: replace the sample FAQ answers with the shop's real policies, then run the command again.
+   - ~~A policies dataset~~ Done Oct 11 as `house-of-m-help` (`flask sync-help`). Return and parcel rules replaced on Oct 13. Still to do: real delivery times, contact details and wallet numbers, then run the command again.
    - Tune the profile: price and sizes in every recommendation; try top_p 0.1-0.3.
    - Tune `UNANSWERED_SCORE_THRESHOLD` using real scores.
    - Try Chorus `initial_prompt` with product names.

@@ -1,4 +1,4 @@
-# StyleMate: The House of "M"
+# StyleMate: Closet Corner (formerly The House of "M")
 AI shopping assistant for clothing shops. Flask + Vue 3, Maira (catalogue answers), Chorus (voice). Due 2026-11-10.
 Status: docs/handoff.md. Architecture: docs/architecture.md. Maira/Chorus API: docs/maira-api.md.
 
@@ -30,11 +30,14 @@ Status: docs/handoff.md. Architecture: docs/architecture.md. Maira/Chorus API: d
 - Ready-made orders lower `Product.stock` (`orders._take_from_stock()`); a CSV upload overwrites stock with the file's numbers.
 - Chat orders: the profile writes an `[ORDER ...]` line; `read_order()` in `services/chat.py` checks it. The AI never places an order itself.
 - After a dataset upload, wait for Maira to read the file before training (`MairaClient.upload_and_train()`).
+- Payment (`services/payments.py`): cash on delivery, or a bKash/Nagad/Rocket transaction ID the owner checks; no gateway, no money moves through the app. Wallet numbers on `Tenant` are sample values.
+- Customer pictures (tailor reference, Help message photo) go through `services/uploads.py`; only the owner can open them.
 - Daily per-visitor limits via `services/limits.py` (hash of IP); limits in `.env`.
 
 ## Image preview (`services/preview.py`, live with `gpt-image-2` since Oct 11)
 - Same `/v1/maira/ask` endpoint, with the shop's image profile (`Tenant.maira_image_profile_id`); empty ID hides the feature.
 - The picture is a preview only; options are checked by `services/pricing.py` and never priced from the picture.
+- No customer photo: the garment alone, no person or face. With a photo: the chosen size (size-guide numbers) or made-to-measure numbers go in the prompt (`fit_description()`); a try-on needs a size.
 - Pictures arrive in `detail.generated_images`; a failed model still answers 200 with the reason in `detail.response`.
 - Products carry optional `length_inches` and `sleeve`; `pricing.options_for()` fits the option menu to them.
 - Size guide (`services/sizes.py`) and Help page (`services/help.py`: FAQ, contact, messages) are per-shop rows seeded from `cli.py`; sample values, not the shop's own.
