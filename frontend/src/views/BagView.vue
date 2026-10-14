@@ -23,6 +23,12 @@ watch(() => account.state.customer, (loggedIn) => {
 const shippingOptions = computed(() => shop.info?.shipping || [])
 const shipping = computed(() => shippingOptions.value.find((option) => option.area === customer.delivery_area) || null)
 const total = computed(() => bag.total.value + (shipping.value?.charge_bdt || 0))
+
+// Cash on delivery, or the customer sends money to the shop's wallet and types the transaction ID.
+// No money moves through this site; the owner checks the ID and marks the order as paid.
+const payment = reactive({ method: '', transaction_id: '' })
+const paymentOptions = computed(() => shop.info?.payment || [])
+const wallet = computed(() => paymentOptions.value.find((option) => option.method === payment.method && option.number) || null)
 const placing = ref(false)
 const error = ref('')
 const confirmation = ref(null)
@@ -35,6 +41,7 @@ async function placeOrder() {
       method: 'POST',
       body: {
         customer,
+        payment: { method: payment.method, transaction_id: wallet.value ? payment.transaction_id : '' },
         // Prices are not sent: the server works them out again.
         items: bag.items.value.map(({ product_code, size, colour, quantity, option_ids, notes, measurements, reference_image }) =>
           ({ product_code, size, colour, quantity, option_ids, notes, measurements, reference_image })),
@@ -60,7 +67,11 @@ async function placeOrder() {
         <template v-if="confirmation.customer_order_number">Your order {{ confirmation.customer_order_number }} (ref #{{ confirmation.order_id }})</template>
         <template v-else>Order ref #{{ confirmation.order_id }}</template>
         is placed. Total {{ formatTaka(confirmation.total_bdt) }}
-        (including {{ formatTaka(confirmation.shipping_bdt) }} delivery), paid on delivery.
+        (including {{ formatTaka(confirmation.shipping_bdt) }} delivery).
+        <template v-if="confirmation.payment_status === 'to_check'">
+          We will check your {{ confirmation.payment_label }} payment ({{ confirmation.payment_reference }}) and confirm your order.
+        </template>
+        <template v-else>You pay cash on delivery.</template>
       </p>
       <ul>
         <li v-for="item in confirmation.items" :key="item.id">
@@ -119,7 +130,27 @@ async function placeOrder() {
           <span>{{ shipping ? formatTaka(shipping.charge_bdt) : 'Choose an area' }}</span>
         </p>
         <p class="total"><span>Total</span><span>{{ formatTaka(total) }}</span></p>
-        <p class="small muted">Cash on delivery. This is a demo shop: no payment is taken.</p>
+
+        <fieldset class="delivery pay">
+          <legend>Pay by</legend>
+          <label v-for="option in paymentOptions" :key="option.method" class="delivery-option">
+            <input v-model="payment.method" type="radio" name="payment-method" :value="option.method" required />
+            <span>{{ option.label }}</span>
+          </label>
+        </fieldset>
+        <div v-if="wallet" class="wallet">
+          <ol class="small">
+            <li>In your {{ wallet.label }} app, choose Send Money.</li>
+            <li>Send <strong>{{ formatTaka(total) }}</strong> to <strong>{{ wallet.number }}</strong>.</li>
+            <li>Type the transaction ID (TrxID) from the confirmation message below.</li>
+          </ol>
+          <div class="field">
+            <label for="transaction-id">{{ wallet.label }} transaction ID</label>
+            <input id="transaction-id" v-model="payment.transaction_id" autocomplete="off" autocapitalize="characters"
+              minlength="6" maxlength="20" required aria-describedby="transaction-help" />
+            <p id="transaction-help" class="small muted">We check it before sending your order.</p>
+          </div>
+        </div>
 
         <div class="field">
           <label for="name">Full name</label>
@@ -228,6 +259,20 @@ async function placeOrder() {
 .delivery-charge {
   margin-left: auto;
   font-weight: 600;
+}
+.wallet {
+  padding: 12px;
+  margin-bottom: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+}
+.wallet ol {
+  margin: 0 0 12px;
+  padding-left: 20px;
+}
+.pay {
+  margin-top: 16px;
 }
 .sum {
   display: flex;

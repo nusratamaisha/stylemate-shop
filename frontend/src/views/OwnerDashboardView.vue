@@ -26,6 +26,7 @@ const syncMessage = ref('')
 
 const STATUS_LABELS = { new: 'New', in_production: 'In production', shipped: 'Shipped' }
 const AREA_LABELS = { inside_dhaka: 'Inside Dhaka', outside_dhaka: 'Outside Dhaka' }
+const PAYMENT_LABELS = { unpaid: 'Not paid yet', to_check: 'Check this payment', paid: 'Paid' }
 
 async function load(fn) {
   error.value = ''
@@ -57,6 +58,15 @@ async function setStatus(item, status) {
     const updated = await api(`/owner/custom-orders/${item.id}`, { method: 'PATCH', body: { status } })
     Object.assign(item, updated)
     if (tab.value === 'sales') sales.value.summary = (await api('/owner/orders')).summary // "to ship" changes
+  })
+}
+
+// After looking in the wallet's history (or collecting the cash), the owner records the result.
+async function setPayment(order, status) {
+  await load(async () => {
+    const updated = await api(`/owner/orders/${order.order_id}/payment`, { method: 'PATCH', body: { status } })
+    order.payment_status = updated.payment_status
+    sales.value.summary = (await api('/owner/orders')).summary // "payments to check" changes
   })
 }
 
@@ -128,7 +138,10 @@ async function logOut() {
           <span class="stat-value">{{ sales.summary.pieces_sold }}</span>
           <span>pieces sold, {{ sales.summary.custom_pieces }} made to order</span>
         </div>
-        <div class="stat"><span class="stat-value">{{ sales.summary.to_ship }}</span><span>lines still to ship</span></div>
+        <div class="stat">
+          <span class="stat-value">{{ sales.summary.to_ship }}</span>
+          <span>lines still to ship, {{ sales.summary.payments_to_check }} {{ sales.summary.payments_to_check === 1 ? 'payment' : 'payments' }} to check</span>
+        </div>
       </div>
 
       <div v-if="sales.summary.best_sellers.length" class="best">
@@ -152,6 +165,12 @@ async function logOut() {
           {{ order.customer_name }} · {{ order.phone }}<span v-if="order.has_account" class="tag custom">Has an account</span><br />
           <span class="muted">{{ order.address }} · {{ AREA_LABELS[order.delivery_area] || 'Area not given' }}
             ({{ formatTaka(order.shipping_bdt) }} delivery)</span>
+        </p>
+        <p class="small payment">
+          <span>{{ order.payment_label }}<template v-if="order.payment_reference">, TrxID <strong>{{ order.payment_reference }}</strong></template></span>
+          <span class="tag" :class="order.payment_status === 'paid' ? 'custom' : 'out'">{{ PAYMENT_LABELS[order.payment_status] }}</span>
+          <button v-if="order.payment_status !== 'paid'" type="button" class="button secondary small" @click="setPayment(order, 'paid')">Mark as paid</button>
+          <button v-else type="button" class="text-button small" @click="setPayment(order, order.payment_reference ? 'to_check' : 'unpaid')">Undo</button>
         </p>
         <div class="table-wrap">
           <table>
@@ -323,13 +342,20 @@ async function logOut() {
       <p class="muted small">Messages customers sent from the Help page, newest first. Reply by phone or email.</p>
       <div v-if="messages.length" class="table-wrap">
         <table>
-          <thead><tr><th>Sent</th><th>From</th><th>Reply to</th><th>Message</th></tr></thead>
+          <thead><tr><th>Sent</th><th>From</th><th>Reply to</th><th>Message</th><th>Photo</th></tr></thead>
           <tbody>
             <tr v-for="message in messages" :key="message.id">
               <td>{{ formatDate(message.sent_at) }}</td>
               <td>{{ message.name }}</td>
               <td>{{ message.contact }}</td>
               <td class="message-text">{{ message.message }}</td>
+              <td>
+                <a v-if="message.has_picture" :href="`/api/owner/messages/${message.id}/picture`" target="_blank" rel="noopener"
+                  class="message-photo" :aria-label="`Open the photo from ${message.name}`">
+                  <img :src="`/api/owner/messages/${message.id}/picture`" alt="" />
+                </a>
+                <span v-else class="muted">None</span>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -373,6 +399,22 @@ async function logOut() {
 }
 .order-who .tag {
   margin-left: 8px;
+}
+.payment {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 10px;
+  max-width: none;
+}
+.message-photo img {
+  display: block;
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
 }
 @media (max-width: 800px) {
   .stats.four {

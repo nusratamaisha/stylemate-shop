@@ -6,6 +6,7 @@ import { useAccount } from '../stores/account.js'
 import { formatDate, formatTaka } from '../utils/format.js'
 
 const account = useAccount()
+const PAYMENT_NOTES = { unpaid: 'You pay cash on delivery.', to_check: 'We are checking your payment.', paid: 'Paid.' }
 const mode = ref('login') // 'login' | 'register'
 // With a capital first letter, as in the top menu ("maisha" reads better as "Maisha")
 const firstName = computed(() => {
@@ -87,7 +88,8 @@ watch(() => account.state.customer, (customer) => {
             <p class="small"><RouterLink :to="`/products/${item.product_code}#reviews`">Write a review</RouterLink></p>
           </li>
         </ul>
-        <p class="small muted">Includes {{ formatTaka(order.shipping_bdt) }} delivery. Paid on delivery.</p>
+        <p class="small muted">Includes {{ formatTaka(order.shipping_bdt) }} delivery.
+          {{ PAYMENT_NOTES[order.payment_status] || '' }}<template v-if="order.payment_reference"> ({{ order.payment_label }}, {{ order.payment_reference }})</template></p>
       </article>
     </template>
 

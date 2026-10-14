@@ -13,6 +13,9 @@ const form = reactive({ name: '', contact: '', message: '' })
 const sending = ref(false)
 const sent = ref(false)
 const sendError = ref('')
+// An optional photo, for example a wrong size being measured. Only the owner can open it.
+const photoInput = ref(null)
+const MAX_PHOTO_BYTES = 4 * 1024 * 1024 // the server checks this too
 
 onMounted(async () => {
   try {
@@ -25,12 +28,24 @@ onMounted(async () => {
 })
 
 async function send() {
-  sending.value = true
   sendError.value = ''
+  sent.value = false
+  const photo = photoInput.value?.files?.[0]
+  if (photo && photo.size > MAX_PHOTO_BYTES) {
+    sendError.value = 'That photo is too large (4 MB maximum).'
+    return
+  }
+  // Sent as a form, not JSON, so the photo can travel with the message
+  const data = new FormData()
+  Object.entries(form).forEach(([name, value]) => data.append(name, value))
+  if (photo) data.append('picture', photo)
+
+  sending.value = true
   try {
-    await api('/contact', { method: 'POST', body: { ...form } })
+    await api('/contact', { method: 'POST', form: data })
     sent.value = true
     Object.assign(form, { name: '', contact: '', message: '' })
+    photoInput.value.value = ''
   } catch (error) {
     sendError.value = error.message
   } finally {
@@ -81,6 +96,14 @@ async function send() {
           <div class="field">
             <label for="contact-message">Message</label>
             <textarea id="contact-message" v-model="form.message" rows="4" maxlength="1000" required></textarea>
+          </div>
+          <div class="field">
+            <label for="contact-photo">Photo <span class="muted">(optional)</span></label>
+            <input id="contact-photo" ref="photoInput" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="contact-photo-help" />
+            <p id="contact-photo-help" class="small muted">
+              If we sent the wrong size, lay the piece flat, measure it with a tape and attach a photo that shows the number.
+              JPG, PNG or WebP, up to 4 MB.
+            </p>
           </div>
           <button type="submit" class="button" :disabled="sending">{{ sending ? 'Sending…' : 'Send message' }}</button>
           <p v-if="sendError" class="message error" role="alert">{{ sendError }}</p>
