@@ -1,6 +1,7 @@
 <script setup>
-// "See it first": a generated picture of the dress with the chosen changes,
-// optionally on the customer's own photo. A preview only; the price comes from Flask.
+// "See it first": a generated picture of the piece with the chosen changes. Without a photo it
+// shows the piece alone (no person); with the customer's photo it shows the chosen size on them.
+// A preview only; the price comes from Flask.
 import { computed, ref, watch } from 'vue'
 import { api } from '../api.js'
 import { visitorId } from '../utils/visitor.js'
@@ -9,6 +10,9 @@ const props = defineProps({
   product: { type: Object, required: true },
   colour: { type: String, default: '' },
   optionIds: { type: Array, default: () => [] },
+  size: { type: String, default: '' },
+  madeToMeasure: { type: Boolean, default: false },
+  measurements: { type: Object, default: null }, // { bust, waist, hip, length } for a made-to-measure piece
 })
 
 const MAX_PHOTO_BYTES = 4 * 1024 * 1024
@@ -20,12 +24,16 @@ const loading = ref(false)
 const error = ref('')
 const preview = ref(null)
 
-const canAsk = computed(() => !loading.value && (props.optionIds.length > 0 || wish.value.trim() || photo.value))
+// A try-on shows how one size fits, so it needs a size (or a made-to-measure piece, which has none).
+const needsSize = computed(() => Boolean(photo.value) && !props.size && !props.madeToMeasure)
+const canAsk = computed(() => !loading.value && !needsSize.value &&
+  (props.optionIds.length > 0 || wish.value.trim() || photo.value))
 // The picture shows the choices made when it was drawn. Say so once they change.
 const outdated = computed(() => preview.value && preview.value.madeFor !== choiceKey())
 
 function choiceKey() {
-  return JSON.stringify([props.colour, props.optionIds, wish.value.trim(), photo.value?.name || ''])
+  return JSON.stringify([props.colour, props.optionIds, wish.value.trim(), photo.value?.name || '',
+    photo.value ? [props.size, props.measurements] : null]) // the size only shows in a picture on the customer
 }
 
 function choosePhoto(event) {
@@ -52,7 +60,11 @@ async function generate() {
   form.append('colour', props.colour)
   props.optionIds.forEach((id) => form.append('option_ids', id))
   form.append('wish', wish.value.trim())
-  if (photo.value) form.append('photo', photo.value)
+  if (photo.value) {
+    form.append('photo', photo.value)
+    form.append('size', props.madeToMeasure ? '' : props.size)
+    Object.entries(props.measurements || {}).forEach(([name, inches]) => form.append(name, inches))
+  }
 
   loading.value = true
   error.value = ''
@@ -76,8 +88,8 @@ watch(() => props.product.code, () => {
   <section class="preview" aria-labelledby="preview-title">
     <h2 id="preview-title" class="title">See it first</h2>
     <p class="muted small">
-      Get a picture of this piece in {{ colour || 'your colour' }}<span v-if="product.customizable"> with the changes you chose above</span>.
-      Add your photo to see it on you.
+      Get a picture of this piece on its own in {{ colour || 'your colour' }}<span v-if="product.customizable"> with the changes you chose above</span>.
+      Add your photo to see the size you chose on you.
     </p>
 
     <div v-if="product.customizable" class="field">
@@ -96,6 +108,7 @@ watch(() => props.product.code, () => {
       </p>
     </div>
 
+    <p v-if="needsSize" class="message error" role="status">Choose a size above, so the picture can show how that size fits you.</p>
     <button type="button" class="button secondary" :disabled="!canAsk" @click="generate">
       {{ loading ? 'Drawing your preview…' : preview ? 'Draw it again' : 'Show me' }}
     </button>

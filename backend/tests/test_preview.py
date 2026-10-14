@@ -42,7 +42,7 @@ def test_preview_includes_the_customers_typed_idea(client, maira):
 def test_preview_on_the_customer_sends_their_photo_first(app, client, maira, tmp_path):
     (tmp_path / "SR-002.jpg").write_bytes(b"dress photo")  # the shop's own photo of the dress
 
-    response = post_preview(client, photo=(io.BytesIO(PNG), "me.png", "image/png"))
+    response = post_preview(client, size="M", photo=(io.BytesIO(PNG), "me.png", "image/png"))
 
     assert response.status_code == 200
     assert response.get_json()["on_customer"] is True
@@ -50,6 +50,46 @@ def test_preview_on_the_customer_sends_their_photo_first(app, client, maira, tmp
     assert [image.filename for image in request["reference_images"]] == ["me.png", "SR-002.jpg"]
     assert "The first reference image is the customer" in request["prompt"]
     assert "The second reference image is the real piece" in request["prompt"]
+
+
+def test_preview_without_a_photo_shows_the_piece_alone_with_no_person(client, maira):
+    post_preview(client, size="M", wish="a gold border at the hem")
+
+    prompt = maira.image_requests[0]["prompt"]
+    assert "product photo of this piece on its own" in prompt
+    assert "No person, no model, no face" in prompt
+    assert "wearing" not in prompt
+    assert "size M" not in prompt  # a size only matters when someone is wearing the piece
+
+
+def test_try_on_shows_the_chosen_size_on_the_customers_real_body(client, maira):
+    post_preview(client, size="M", photo=(io.BytesIO(PNG), "me.png", "image/png"))
+
+    prompt = maira.image_requests[0]["prompt"]
+    # The size guide's numbers for M, so the model knows what body that size is cut for
+    assert "The piece is size M, cut for a bust of 36 inches, a waist of 30 inches and a hip of 39 inches." in prompt
+    assert "too small for them it must look tight" in prompt
+    assert "Never reshape the person" in prompt
+
+
+def test_try_on_needs_a_size_the_piece_comes_in(client, maira):
+    no_size = post_preview(client, photo=(io.BytesIO(PNG), "me.png", "image/png"))
+    assert no_size.status_code == 400
+    assert "Choose a size first" in no_size.get_json()["error"]
+
+    wrong = post_preview(client, size="XXL", photo=(io.BytesIO(PNG), "me.png", "image/png"))  # SR-002 stops at L
+    assert wrong.status_code == 400
+    assert maira.image_requests == []  # neither reached the paid call
+
+
+def test_try_on_of_a_made_to_measure_piece_uses_the_customers_measurements(client, maira):
+    response = post_preview(client, option_ids=[str(option_id("Fit", "Made to your measurements"))],
+                            bust="38", waist="32", hip="40", photo=(io.BytesIO(PNG), "me.png", "image/png"))
+
+    assert response.status_code == 200  # no S, M or L needed
+    prompt = maira.image_requests[0]["prompt"]
+    assert "made to this person's own measurements (bust 38 in, waist 32 in, hip 40 in)" in prompt
+    assert "fits their body exactly" in prompt
 
 
 def test_preview_needs_something_to_show(client, maira):

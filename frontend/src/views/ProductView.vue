@@ -160,7 +160,8 @@ function askAbout() {
         <p class="stock" :class="{ out: !product.in_stock }">{{ stockText }}</p>
 
         <CustomizePanel v-if="product.customizable" :key="product.code + JSON.stringify($route.query)" :product="product" @change="custom = $event" @use-size="size = $event" />
-        <PreviewPanel v-if="product.preview_available" :product="product" :colour="colour" :option-ids="custom.optionIds" />
+        <PreviewPanel v-if="product.preview_available" :product="product" :colour="colour" :option-ids="custom.optionIds"
+          :size="size" :made-to-measure="madeToMeasure" :measurements="custom.measurements" />
 
         <div class="buy">
           <button type="button" class="button" :disabled="!canAdd" @click="addToBag">{{ buttonText }}</button>

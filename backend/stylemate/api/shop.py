@@ -57,6 +57,8 @@ def product_preview(code: str):
         colour=request.form.get("colour") or "",
         option_ids=request.form.getlist("option_ids"),
         wish=request.form.get("wish") or "",
+        size=request.form.get("size") or "",
+        measurements={name: request.form.get(name) for name in ("bust", "waist", "hip", "length")},
         photo=ReferenceImage(photo.filename or "photo", photo.read(), photo.mimetype or "") if photo else None,
     )
     return jsonify(preview.to_dict())
