@@ -1,7 +1,8 @@
 """The Help page: frequently asked questions, the shop's contact details, and messages from customers.
 
 The same answers are also sent to Maira (HelpPublisher), so the stylist chat can
-answer "can I return this?" or "what size is XL?" from the shop's own words.
+answer "can I return this?", "what size is XL?" or "what do longer sleeves cost?"
+from the shop's own words and prices.
 """
 
 import csv
@@ -9,8 +10,9 @@ import io
 
 from ..errors import UserInputError
 from ..extensions import db
-from ..models import ContactMessage, FaqItem, Tenant
-from .sizes import size_guide
+from ..models import ContactMessage, CustomizationOption, FaqItem, Tenant
+from .pricing import MEASUREMENTS, SLEEVE_GROUP
+from .sizes import size_guide, sleeve_word
 
 HELP_COLUMNS = ["help_id", "topic", "question", "answer"]
 
@@ -103,6 +105,8 @@ def help_documents(tenant: Tenant) -> list[dict]:
                        "measured from the shoulder seam to the edge of the sleeve."),
         })
 
+    rows += customization_documents(tenant, guide["sleeves"])
+
     contact = page["contact"]
     parts = [f"{label}: {contact[key]}" for key, label in
              (("phone", "Phone"), ("email", "Email"), ("address", "Address"), ("hours", "Opening hours")) if contact[key]]
@@ -111,6 +115,90 @@ def help_documents(tenant: Tenant) -> list[dict]:
                      "question": "How can I contact the shop?",
                      "answer": ". ".join(parts) + ". You can also send a message from the Help page of the website."})
     return rows
+
+
+def customization_documents(tenant: Tenant, sleeves: list[dict]) -> list[dict]:
+    """What changes cost and how the product page works them out, from the shop's own option rows.
+
+    Built from the database, not written by hand, so the assistant's prices can't drift from
+    what pricing.py charges. Without these the assistant said the price of longer sleeves
+    "isn't specified" (Oct 15).
+    """
+    options = db.session.scalars(db.select(CustomizationOption).where(CustomizationOption.tenant_id == tenant.id)
+                                 .order_by(CustomizationOption.position)).all()
+    if not options:
+        return []
+    inches = {sleeve_word(row["name"]): row["length_inches"] for row in sleeves}
+    groups: dict[str, list[str]] = {}
+    for option in options:
+        about = inches.get(sleeve_word(option.label)) if option.group == SLEEVE_GROUP else None
+        # A length is cut to the number typed, so "Shorter by 2 inches" would mislead here
+        label = (("Longer" if option.length_change_inches > 0 else "Shorter") + " length"
+                 if option.length_change_inches else option.label)
+        groups.setdefault(option.group, []).append(
+            f"{label}{f' (about {about} inches)' if about else ''}: {_price_words(option.extra_price_bdt)}"
+            f", {option.extra_days} extra day{'s' if option.extra_days != 1 else ''}")
+    charges = "; ".join(f"{group}: {', '.join(lines)}" for group, lines in groups.items())
+    boxes = ", ".join(words for words, *_ in MEASUREMENTS.values())
+    base = tenant.custom_base_days
+
+    rows = [
+        ("CUSTOM-CHARGES", "What does each change to a piece cost?",
+         f"Only pieces marked \"Can be customized\" can be changed. The price of a changed piece is the piece's own "
+         f"price plus these charges (a minus is a discount, because the change uses less fabric): {charges}. "
+         f"A changed piece is made to order: ready in about {base} days plus the extra days of each change. "
+         "Sleeves and length are worked out from the measurements typed on the product page; for a lining "
+         "or sleeveless, tell the stylist when ordering in the chat."),
+        ("CUSTOM-HOW", "How do I customize a piece or order it to my measurements?",
+         f"On the product page, under \"Make it yours\", type your measurements in inches: {boxes}. Only the bust "
+         "is needed. Typing them makes the piece made to measure at no extra charge, with no S, M or L to choose; "
+         "leaving them empty orders a standard size. The sleeve and length charges are added from your numbers "
+         "and the page shows the final price before you order. You can also tell the stylist in the chat."),
+    ]
+    sleeve_options = [option for option in options if option.group == SLEEVE_GROUP]
+    if sleeve_options:
+        table = ", ".join(f"{name} about {length} inches" for name, length in inches.items())
+        rows.append(("CUSTOM-SLEEVES", "How much do longer or shorter sleeves cost?",
+                     f"Sleeve lengths are measured from the shoulder seam: {table}. If the sleeve length you type "
+                     "is more than an inch longer than the piece's own sleeve, the nearest longer sleeve is charged; "
+                     "more than an inch shorter, the nearest shorter sleeve. "
+                     + "; ".join(f"{option.label}: {_price_words(option.extra_price_bdt)}" for option in sleeve_options)
+                     + _sleeve_example(sleeve_options, inches)))
+    length_options = [option for option in options if option.length_change_inches]
+    if length_options:
+        longer = [option for option in length_options if option.length_change_inches > 0]
+        shorter = [option for option in length_options if option.length_change_inches < 0]
+        parts = ([f"more than an inch longer than the piece costs {_price_words(longer[0].extra_price_bdt)}"]
+                 if longer else []) + \
+                ([f"more than an inch shorter costs {_price_words(shorter[0].extra_price_bdt)}"] if shorter else [])
+        rows.append(("CUSTOM-LENGTH", "How much does a longer or shorter length cost?",
+                     "Type the length you want in inches and the piece is cut to exactly that. A length "
+                     f"{'; a length '.join(parts)}, however many inches it changes. "
+                     "Each product page shows the piece's own length."))
+    return [{"help_id": help_id, "topic": "Customization", "question": question, "answer": answer}
+            for help_id, question, answer in rows]
+
+
+def _sleeve_example(sleeve_options: list[CustomizationOption], inches: dict[str, int]) -> str:
+    """". For example, a short-sleeved piece costing 1,900 taka …", with the shop's own longest sleeve and price."""
+    known = [option for option in sleeve_options if sleeve_word(option.label) in inches]
+    if "short" not in inches or not known:
+        return "."
+    longest = max(known, key=lambda option: inches[sleeve_word(option.label)])
+    if inches[sleeve_word(longest.label)] <= inches["short"]:
+        return "."
+    typed, total = inches[sleeve_word(longest.label)] - 2, 1900 + longest.extra_price_bdt
+    return (f". For example, a short-sleeved piece costing 1,900 taka with sleeves of about {typed} inches gets "
+            f"{longest.label.lower()}, so it costs 1,900 {'+' if longest.extra_price_bdt >= 0 else '-'} "
+            f"{abs(longest.extra_price_bdt)} = {total:,} taka.")
+
+
+def _price_words(amount: int) -> str:
+    if amount > 0:
+        return f"{amount} taka extra"
+    if amount < 0:
+        return f"{-amount} taka less"
+    return "no extra charge"
 
 
 def help_csv(tenant: Tenant) -> bytes:

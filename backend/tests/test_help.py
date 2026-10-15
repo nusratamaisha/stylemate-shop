@@ -120,3 +120,23 @@ def test_help_answers_are_sent_to_their_own_maira_dataset(app, tenant, maira):
     # Sending again reuses the dataset instead of creating a second one
     publisher.publish(tenant)
     assert len(maira.created_datasets) == 1
+
+
+def test_the_assistant_gets_the_customization_charges_from_the_database(app, tenant):
+    # Oct 15: without them the assistant said the price of longer sleeves "isn't specified"
+    from stylemate.models import CustomizationOption
+    from stylemate.services.help import help_documents
+
+    answers = {row["help_id"]: row["answer"] for row in help_documents(tenant)}
+    assert "Full sleeves (about 23 inches): 200 taka extra" in answers["CUSTOM-CHARGES"]
+    assert "Made to your measurements: no extra charge" in answers["CUSTOM-CHARGES"]
+    assert "longer than the piece costs 250 taka extra" in answers["CUSTOM-LENGTH"]
+    assert "1,900 + 200 = 2,100 taka" in answers["CUSTOM-SLEEVES"]
+
+    # A new price in the database is what the assistant is told next time
+    full = db.session.scalar(db.select(CustomizationOption).where(CustomizationOption.label == "Full sleeves"))
+    full.extra_price_bdt = 220
+    db.session.commit()
+    answers = {row["help_id"]: row["answer"] for row in help_documents(tenant)}
+    assert "Full sleeves (about 23 inches): 220 taka extra" in answers["CUSTOM-CHARGES"]
+    assert "1,900 + 220 = 2,120 taka" in answers["CUSTOM-SLEEVES"]  # the worked example follows it
