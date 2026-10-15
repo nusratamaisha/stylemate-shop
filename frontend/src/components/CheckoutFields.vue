@@ -87,6 +87,12 @@ const id = (name) => `${props.idPrefix}-${name}`
     <label :for="id('address')">Delivery address</label>
     <textarea :id="id('address')" v-model="customer.address" rows="3" autocomplete="street-address" required></textarea>
   </div>
+
+  <!-- Shown just above the confirm button on the checkout page and in the chat -->
+  <p class="final-warning small" role="note">
+    <strong>Please check everything before you confirm:</strong> the piece, size, colour, measurements,
+    address and phone number. Once your order is confirmed, it can’t be cancelled.
+  </p>
 </template>
 
 <style scoped>
@@ -134,6 +140,13 @@ const id = (name) => `${props.idPrefix}-${name}`
 }
 .pay {
   margin-top: 16px;
+}
+.final-warning {
+  margin: 4px 0 14px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: #fbf2dc;
+  color: #6b4a05;
 }
 .sum {
   display: flex;
