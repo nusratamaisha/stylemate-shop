@@ -162,6 +162,8 @@ Options are database rows (`CustomizationOption`), not code. A shop adds a new o
 
 **A reference picture for the tailor.** Under the notes box a customer can attach a photo or sketch. It is uploaded as soon as it is chosen (`POST /api/reference-pictures`), because the bag lives in the browser and can't hold a file. Flask checks the type and size, saves it in `backend/uploads/` under a random name, and returns that name; the order line then carries it. At checkout `orders.py` accepts the name only if that file really exists and the line is made to order, so a made-up name is ignored. The picture is opened through an owner-only route (`/api/owner/custom-orders/<id>/reference-picture`), and the owner sees a thumbnail in the custom order queue. Uploads are limited per visitor per day like messages and previews.
 
+**The assistant knows the charges.** `flask sync-help` also sends four customization answers built from the option rows (`help.customization_documents()`): what each change costs and adds in days, that made to measure is free, how sleeve length and length turn into charges, and a worked example. Built from the database, they can't drift from what `pricing.py` charges. Profile rules 5 and 8 let the assistant quote them ("1,900 + 200 = 2,100 taka") while the product page still shows the final price; the assistant still never sets a price, and checkout recalculates.
+
 **Only the numbers change the price, never the notes or the picture.** Notes and a reference picture go with pieces made to order only; without measurements the panel says they won't be sent and that the standard size is ordered at the listed price.
 
 Both columns are optional. A product without them keeps the full menu and simply can't show results. The sleeve match compares words, so the CSV must use the same words as the option labels ("Short" for "Short sleeves").
@@ -278,7 +280,7 @@ Run them from `backend/`:
 uv run pytest
 ```
 
-There are 133 tests. They use the fake clients, so they need no keys, cost nothing and run in seconds. They cover response parsing (including the `detail` wrapper and string scores), Chorus polling and timeouts, pricing rules, checkout that ignores tampered prices, the unanswered flag, the owner login wall, CSV import errors, and the image preview (the prompt, the order of reference pictures, and every refusal).
+There are 134 tests. They use the fake clients, so they need no keys, cost nothing and run in seconds. They cover response parsing (including the `detail` wrapper and string scores), Chorus polling and timeouts, pricing rules, checkout that ignores tampered prices, the unanswered flag, the owner login wall, CSV import errors, and the image preview (the prompt, the order of reference pictures, and every refusal).
 
 ## 7. Known limits and next steps
 

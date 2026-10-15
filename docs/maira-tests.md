@@ -47,6 +47,7 @@ Tests 10, 11 and 11b check the order line from profile rule 7 (rewritten Oct 15:
 | 10 | I'd like to order the Maya Gingham Tiered Dress in size M. | One short confirming sentence, then a last line `[ORDER product_id=SR-017; size=M; colour=; quantity=1]` (the colour may be filled in or left empty; Flask fills in a piece's only colour). Asks for no name, phone or address. | | | | |
 | 11 | I'd like to order the Akash Striped Ruffle Shirt Dress in size L. | Says it is out of stock and writes **no** `[ORDER ...]` line. | | | | |
 | 11b | I want to order the Jui top. | One short friendly sentence and `[ORDER product_id=SR-023; size=; colour=; quantity=1]` straight away. Does **not** ask "Which size?" or "Would you like it in Yellow?" itself: the chat asks that. | | | | |
+| 11c | Dalim Ruffle-Sleeve Dress er hata 21 inch korte koto lagbe? | Says it is customizable, full sleeves cost ৳200 more, so **৳1,900 + ৳200 = ৳2,100**, plus about 2 extra days; points to "Make it yours" for the final price. Never says the charge "isn't specified". Needs rules 5 and 8 pasted and `flask sync-help` run. | | | | |
 | 12 | How can I pay? | Cash on delivery, or bKash, Nagad or Rocket with the transaction ID entered at checkout. Does not ask for a payment itself. | | | | |
 
 ## Tests (Oct 6, the first ten-product catalogue)
