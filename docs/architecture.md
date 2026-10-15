@@ -102,15 +102,19 @@ Each file has one job. If you know what you want to change, this table tells you
 
 ### A2. A customer orders from the chat
 
-The customer picks a piece, a size and a colour in conversation, says "yes, order it", and gets the assistant's reply with a "Go to checkout" link.
+The customer picks a piece, a size and a colour in conversation, says "yes, order it", and finishes the order without leaving the chat, the way a shop answers on Messenger. The old way, "Go to checkout", still works too.
 
 1. Rule 7 of the Maira profile (`docs/maira-profile.md`) tells the assistant to collect the product, size and colour, and, once the customer confirms, to end its answer with one marker line: `[ORDER product_id=SR-002; size=S; colour=Emerald; quantity=1]`.
 2. `read_order()` in `services/chat.py` takes that line out of the answer, so the customer never sees it, and checks every part against the database: the product exists in this shop, it comes in that size and colour, and enough is in stock.
 3. If it all holds, the reply carries an `order` with the shop's own spelling and the price **from the database**. If not, there is no order and the answer says why ("comes in S, M, L").
-4. `ChatWidget.vue` shows the assistant's message with a summary (piece, size, colour, price) and a "Go to checkout" button. Pressing it adds the piece to the bag, closes the chat and opens `/bag`. The customer decides when to leave the chat; nothing redirects on its own.
-5. The customer types their name, phone and address there and places the order. Checkout recalculates the price as always (journey D).
+4. `ChatWidget.vue` shows the assistant's message with `ChatOrderCard.vue`: a summary (piece, size, colour, price) and two choices.
+   - **"Order here in the chat"** opens a small form inside the chat: delivery area, payment (cash on delivery, or a bKash/Nagad/Rocket TrxID), name, phone and address. A logged-in customer's name and phone are filled in. "Confirm order" sends it to the same `POST /api/orders` as the checkout page, with `source: "chat"`. The card then shows the order number, the total with delivery, and how payment works.
+   - **"Or go to checkout"** adds the piece to the bag, closes the chat and opens `/bag`, as before.
+5. Either way, `orders.place_order()` checks and prices the order exactly as in journey D: sizes, colours, stock, delivery charge and payment. The only difference is `Order.source` (`website` or `chat`), which the owner sees as a **Chat** badge in the Orders tab, and `sales_summary()` counts as `chat_orders`, so the shop can see how much the assistant sells.
 
-**Why a marker and not "let the AI place the order":** the assistant only *proposes*. It can't create an order, set a price or skip the stock check, because Flask does those. A wrong or invented marker is refused. The delivery details are typed into a normal form, not into the chat, so they never pass through Maira. Customized pieces are still ordered on the product page, where the price of each change is shown.
+The form's fields live in `CheckoutFields.vue`, shared by the checkout page and the chat card, so both ask the same questions and show the same total (DRY: pulled out when the chat became the second place to order).
+
+**Why a marker and not "let the AI place the order":** the assistant only *proposes*. It can't create an order, set a price or skip the stock check, because Flask does those. A wrong or invented marker is refused. The delivery details are typed into a form, even inside the chat, not written to the assistant, so a phone number or address never passes through Maira and can't be misread by it. Customized pieces are still ordered on the product page, where the price of each change is shown.
 
 ### B. A customer asks by voice
 
@@ -181,7 +185,7 @@ The two charges are fields on the shop's `Tenant` row, so another shop can charg
 
 ### F. The owner dashboard
 
-The dashboard opens on the **Orders** tab (`GET /api/owner/orders`). `orders.sales_summary()` gives the numbers an owner checks first: how many orders, sales in taka (with delivery money shown apart, because it is collected, not earned), pieces sold and how many were made to order, lines still to ship, and the five best sellers. Below them, `orders.all_orders()` lists **every** order, ready-made and made to order, with the customer's name, phone, address and delivery area, and a status for each line. The **Custom orders** tab is the tailor's queue: the same made-to-order lines, with their changes, measurements and reference pictures.
+The dashboard opens on the **Orders** tab (`GET /api/owner/orders`). `orders.sales_summary()` gives the numbers an owner checks first: how many orders (and how many were confirmed in the chat), sales in taka (with delivery money shown apart, because it is collected, not earned), pieces sold and how many were made to order, lines still to ship, and the five best sellers. Below them, `orders.all_orders()` lists **every** order, ready-made and made to order, with the customer's name, phone, address and delivery area, and a status for each line. The **Custom orders** tab is the tailor's queue: the same made-to-order lines, with their changes, measurements and reference pictures.
 
 For the **Customer questions** tab, `services/insights.py` reads the shop's `ChatTurn` rows and returns:
 
@@ -263,7 +267,7 @@ Run them from `backend/`:
 uv run pytest
 ```
 
-There are 115 tests. They use the fake clients, so they need no keys, cost nothing and run in seconds. They cover response parsing (including the `detail` wrapper and string scores), Chorus polling and timeouts, pricing rules, checkout that ignores tampered prices, the unanswered flag, the owner login wall, CSV import errors, and the image preview (the prompt, the order of reference pictures, and every refusal).
+There are 118 tests. They use the fake clients, so they need no keys, cost nothing and run in seconds. They cover response parsing (including the `detail` wrapper and string scores), Chorus polling and timeouts, pricing rules, checkout that ignores tampered prices, the unanswered flag, the owner login wall, CSV import errors, and the image preview (the prompt, the order of reference pictures, and every refusal).
 
 ## 7. Known limits and next steps
 
