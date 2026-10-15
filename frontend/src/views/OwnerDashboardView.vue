@@ -50,6 +50,8 @@ const loaders = {
 const usage = ref(null)
 const KIND_LABELS = { chat: 'AI chat questions', preview: 'picture previews' }
 const warnings = computed(() => (usage.value?.meters || []).filter((meter) => meter.warn))
+const left = (meter) => Math.max(0, meter.limit - meter.used)
+const number = (value) => value.toLocaleString('en-IN')
 
 onMounted(() => load(async () => {
   owner.value = await api('/owner/me')
@@ -122,6 +124,21 @@ async function logOut() {
       </div>
       <button type="button" class="button secondary small" @click="logOut">Log out</button>
     </div>
+
+    <!-- Always visible: what is left of this month's plan (GET /api/owner/usage) -->
+    <section v-if="usage?.meters.length" class="usage" aria-label="This month's plan use">
+      <p class="usage-plan"><strong>{{ usage.plan }} plan</strong> <span class="muted">· this month</span></p>
+      <div v-for="meter in usage.meters" :key="meter.kind" class="meter">
+        <p class="meter-text">
+          <span class="meter-name">{{ KIND_LABELS[meter.kind] }}</span>
+          <span><strong>{{ number(left(meter)) }} left</strong> <span class="muted">of {{ number(meter.limit) }}</span></span>
+        </p>
+        <div class="bar" role="progressbar" :aria-valuenow="meter.used" aria-valuemin="0" :aria-valuemax="meter.limit"
+          :aria-label="`${KIND_LABELS[meter.kind]} used`">
+          <span :class="{ warn: meter.warn, over: meter.over }" :style="{ width: `${Math.min(100, (meter.used / meter.limit) * 100)}%` }"></span>
+        </div>
+      </div>
+    </section>
 
     <div v-for="meter in warnings" :key="meter.kind" class="plan-warning" :class="{ over: meter.over }" role="status">
       <strong>{{ usage.plan }} plan:</strong>
@@ -602,6 +619,51 @@ td select {
   .columns {
     grid-template-columns: 1fr;
   }
+}
+.usage {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 32px;
+  margin: 0 0 16px;
+  padding: 14px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+}
+.usage-plan {
+  margin: 0;
+}
+.meter {
+  flex: 1;
+  min-width: 220px;
+}
+.meter-text {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 6px;
+  font-size: var(--step--1);
+}
+.meter-name::first-letter {
+  text-transform: uppercase; /* "Picture previews" here, "picture previews" mid-sentence in the warning */
+}
+.bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--jamdani);
+  overflow: hidden;
+}
+.bar span {
+  display: block;
+  height: 100%;
+  background: var(--ok);
+}
+.bar span.warn {
+  background: var(--haldi);
+}
+.bar span.over {
+  background: var(--danger);
 }
 .plan-warning {
   margin: 0 0 16px;

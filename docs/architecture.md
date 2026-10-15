@@ -278,7 +278,7 @@ Decided Oct 15: StyleMate is sold to **clothing shops that sell only on Facebook
    - **Picture previews:** per month (none on Starter). The panel is hidden once they're used up.
    - **Gigalogy recommendations:** Growth and Pro; Starter gets the shop's own picks.
    - **Products:** a CSV upload that would pass the plan's number is refused.
-   - A shop past a limit gets **10% grace**, then customers are told to message the shop from the Help page. The owner's dashboard shows a warning banner from **80%** (`GET /api/owner/usage`).
+   - A shop past a limit gets **10% grace**, then customers are told to message the shop from the Help page. The owner's dashboard always shows what is left this month ("350 left of 2,000", with a bar that turns amber at 80% and red at the limit) and a warning banner from **80%** (`GET /api/owner/usage`).
 4. **Demo requests** are saved in `DemoRequest`, the one table without a `tenant_id`, because they are StyleMate's leads, not a shop's data. List them with `uv run flask demo-requests`. A shop is then set up by hand and put on its plan with `uv run flask set-plan growth`, after its monthly bKash payment.
 
 ### H. A customer needs help
