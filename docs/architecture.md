@@ -55,6 +55,8 @@ Each file has one job. If you know what you want to change, this table tells you
 | `services/payments.py` | How an order is paid: cash on delivery, or a bKash, Nagad or Rocket transaction ID that the owner checks |
 | `services/sizes.py` | The size guide: what body each size fits, and how long each kind of sleeve is |
 | `services/preview.py` | Image preview: checks the request, writes the prompt, asks Maira for the picture |
+| `services/plans.py` | StyleMate's three monthly plans: prices and limits in one place, monthly usage counting and enforcement |
+| `services/demo_requests.py` | "Request a demo" from the public StyleMate page (StyleMate's own leads, no tenant) |
 | `services/recommendations.py` | "You may also like" and "Complete the look": Gigalogy's suggestions, filtered to what the shop can sell this customer, with the shop's own picks as backup |
 | `services/orders.py` | Checkout and the custom order queue |
 | `services/catalog.py` | Reading products and importing a CSV |
@@ -264,6 +266,21 @@ Step 1 of recommendations (Oct 15). Gigalogy's recommender (same server and keys
 
 **Next steps (not built):** send page views, purchases and review ratings to the recommender (`/v1/items/browse`, `/v1/items/purchase`, `/v1/items/rating`), then "Picked for you" with `/v1/users/recommend`.
 
+### K. Selling StyleMate to shop owners
+
+Decided Oct 15: StyleMate is sold to **clothing shops that sell only on Facebook**, as a hosted shop website with the AI stylist (Closet Corner is the demo). New shops come in through **"Request a demo"**, not self-service signup.
+
+1. **The public page** `/stylemate` (`StyleMateView.vue`) has its own look (indigo, no shop header, footer or chat; `App.vue` leaves them out). It covers the problem, how it works, the features that are really built, the three plans and the demo form. Every shop's footer links to it ("This shop's website and AI stylist run on StyleMate"), so each storefront also advertises the platform.
+2. **Plans** live only in `services/plans.py`. The page reads them from `GET /api/plans`, so the page and the app can never disagree. **The prices are examples** (`PRICES_ARE_EXAMPLES = True`, said on the page) until Gigalogy's price per call is known: price = cost per conversation × margin.
+3. **Limits are enforced** on what costs money per use, counted per shop per month in `PlanUsage`:
+   - **Chat questions** (typed and spoken): `plans.require()` runs before Maira is asked, and `plans.record()` counts only after Maira answered, so a failed call doesn't use up the month.
+   - **Voice:** off on Starter. The microphone is hidden (`features.voice` in `GET /api/shop`), and `/api/voice` refuses before Chorus is paid to listen.
+   - **Picture previews:** per month (none on Starter). The panel is hidden once they're used up.
+   - **Gigalogy recommendations:** Growth and Pro; Starter gets the shop's own picks.
+   - **Products:** a CSV upload that would pass the plan's number is refused.
+   - A shop past a limit gets **10% grace**, then customers are told to message the shop from the Help page. The owner's dashboard shows a warning banner from **80%** (`GET /api/owner/usage`).
+4. **Demo requests** are saved in `DemoRequest`, the one table without a `tenant_id`, because they are StyleMate's leads, not a shop's data. List them with `uv run flask demo-requests`. A shop is then set up by hand and put on its plan with `uv run flask set-plan growth`, after its monthly bKash payment.
+
 ### H. A customer needs help
 
 1. "Help" in the top menu opens `HelpView.vue`, which loads `GET /api/help`: the shop's questions and answers (`FaqItem` rows) and its contact details (four fields on the `Tenant` row).
@@ -304,7 +321,7 @@ Run them from `backend/`:
 uv run pytest
 ```
 
-There are 148 tests. They use the fake clients, so they need no keys, cost nothing and run in seconds. They cover response parsing (including the `detail` wrapper and string scores), Chorus polling and timeouts, pricing rules, checkout that ignores tampered prices, the unanswered flag, the owner login wall, CSV import errors, and the image preview (the prompt, the order of reference pictures, and every refusal).
+There are 158 tests. They use the fake clients, so they need no keys, cost nothing and run in seconds. They cover response parsing (including the `detail` wrapper and string scores), Chorus polling and timeouts, pricing rules, checkout that ignores tampered prices, the unanswered flag, the owner login wall, CSV import errors, and the image preview (the prompt, the order of reference pictures, and every refusal).
 
 ## 7. Known limits and next steps
 
