@@ -1,8 +1,9 @@
 <script setup>
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { api } from '../api.js'
 import CheckoutFields from '../components/CheckoutFields.vue'
 import ProductImage from '../components/ProductImage.vue'
+import RecommendedProducts from '../components/RecommendedProducts.vue'
 import { useAccount } from '../stores/account.js'
 import { useBag } from '../stores/bag.js'
 import { refreshProducts } from '../stores/shop.js'
@@ -15,6 +16,8 @@ const customer = reactive({ name: '', phone: '', address: '', delivery_area: '' 
 // Delivery, payment and contact fields, the total and the account prefill live in CheckoutFields
 const payment = reactive({ method: '', transaction_id: '' })
 const remember = ref(true)
+// One code per piece, so changing a quantity doesn't ask for new suggestions
+const bagCodes = computed(() => [...new Set(bag.items.value.map((item) => item.product_code))].sort())
 
 const placing = ref(false)
 const error = ref('')
@@ -110,6 +113,10 @@ async function placeOrder() {
         <button type="submit" class="button full" :disabled="placing">{{ placing ? 'Placing your order…' : 'Place order' }}</button>
       </form>
     </div>
+
+    <!-- Pieces that go with what's in the bag (hidden after ordering and when the bag is empty) -->
+    <RecommendedProducts v-if="!confirmation && bag.items.value.length" title="Complete the look"
+      :bag-codes="bagCodes" />
   </div>
 </template>
 

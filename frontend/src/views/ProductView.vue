@@ -4,6 +4,7 @@ import { api } from '../api.js'
 import CustomizePanel from '../components/CustomizePanel.vue'
 import PreviewPanel from '../components/PreviewPanel.vue'
 import ProductReviews from '../components/ProductReviews.vue'
+import RecommendedProducts from '../components/RecommendedProducts.vue'
 import ProductImage from '../components/ProductImage.vue'
 import SizeGuide from '../components/SizeGuide.vue'
 import { useAccount } from '../stores/account.js'
@@ -183,6 +184,7 @@ function askAbout() {
       </div>
     </article>
 
+    <RecommendedProducts v-if="product" title="You may also like" :product-code="product.code" />
     <ProductReviews v-if="product" :code="product.code" />
 
     <dialog ref="sizeGuideDialog" class="size-dialog" aria-labelledby="size-dialog-title" @click.self="sizeGuideDialog.close()">
