@@ -130,31 +130,39 @@ The checkout fields live in `CheckoutFields.vue`, shared by the checkout page an
 
 ### C. A customer customizes a dress
 
-1. `ProductView.vue` loads `GET /api/products/SR-002`. For customizable products, the response includes the shop's options grouped by Sleeves, Length, Lining and Fit.
-2. Each choice in `CustomizePanel.vue` sends `POST /api/price-quote` with the option IDs.
-3. `services/pricing.py` checks the product is customizable, allows one option per group, refuses an option the piece already has, adds the extra prices, and works out the ready date (7 days plus each option's extra days).
-4. The panel shows the breakdown. The customer adds the custom piece to the bag.
+Since Oct 15 the product page shows **only measurement boxes** (bust, and optionally waist, sleeve length and length), no sleeve, length, lining or fit buttons, so the page stays simple.
+
+1. `ProductView.vue` loads `GET /api/products/SR-002`. For customizable products, `CustomizePanel.vue` shows the four boxes. Left empty, the customer orders a standard size as usual.
+2. Typing any measurement makes the piece made to measure: the size buttons give way to "made to your measurements". After a short pause in typing, the panel sends `POST /api/price-quote` with the measurements.
+3. `pricing.quote_for()` turns the numbers into options with `measured_options()`, so the customer never picks them:
+   - **Made to your measurements**, always. It is **free** (the ৳300 charge was removed on Oct 15) and adds 3 days.
+   - **Sleeves:** the sleeve length is compared with this piece's sleeve in the size guide (short 7 in, three-quarter 16 in, full 23 in). Longer or shorter by more than an inch picks the shop's sleeve option on that side that comes closest: 21 in on a short-sleeved piece is **Full sleeves +৳200**, 8 in on a full sleeve is **Short sleeves −৳100**.
+   - **Length:** longer than the piece by more than an inch is **+৳250**, shorter is **−৳100**, and the piece is cut to the exact number.
+4. `calculate_quote()` prices them as before (customizable only, one option per group, nothing the piece already has, ready date) and describes each one with the customer's number: "Sleeves: Full sleeves, cut to 21 in", "Length: shorter than shown, cut to 31 in". The panel lists those lines with their prices, so every charge is on the bill.
+5. At checkout, `orders.py` calls the same `quote_for()` with the measurements, so the price is worked out again on the server and can't be edited in the browser.
+
+Options are still database rows (`CustomizationOption`), not code; only how they are chosen moved from buttons to `measured_options()`. **Lining** is no longer offered on the product page (a customer can ask in the notes); it is still a row, and the chat's order questions still offer it.
 
 Options are database rows (`CustomizationOption`), not code. A shop adds a new option by adding a row.
 
 **How the customer knows what they are changing.** A change like "Shorter by 2 inches" means nothing without a starting point, so each product can carry two specifications from the CSV: `length_inches` (shoulder to hem) and `sleeve` ("Full", "Three-quarter", "Sleeveless"...). `pricing.options_for()` uses them to fit the shop-wide menu to the product:
 
-- Each group shows what the piece is like now: "Sleeves, now: Full", "Length, now: 56 in".
+- The chat's order questions show what the piece is like now: "Sleeves (now Full)", "Length (now 56 in)".
 - The option the piece already has is left out, so a full-sleeved dress doesn't offer "Full sleeves" for +৳200. `calculate_quote()` refuses it too, so checkout can't be tricked into charging for it.
 - Length options show the result: "Shorter by 2 inches (54 in)". The same text goes into the order, so the tailor reads the final length.
 - The image preview tells the model what the piece is like as sold, so it changes the right thing.
 
 **The size guide** answers the two questions a number alone can't: "what body is an XL for?" and "how long is a short sleeve?". It is two small tables per shop, `SizeGuideRow` (bust, waist and hip for each size) and `SleeveLength` (inches for each kind of sleeve), filled with starting values by `flask seed`. `GET /api/size-guide` returns both. The customer meets it in three places: the "Size guide" page in the top menu, a "Size guide" link beside the size choice that opens a pop-up showing only that product's sizes, and the sleeve options themselves, which read "Short sleeves (about 7 in)". It is rows, not code, for the same reason as the options: another shop cuts its sizes differently.
 
-**A change can lower the price.** Short sleeves, sleeveless and a shorter length use less fabric, so their rows hold a negative amount (−৳100, −৳150, −৳100) and the panel shows them in green. They are still made to order, so the ready date still applies.
+**A change can lower the price.** Short sleeves, sleeveless and a shorter length use less fabric, so their rows hold a negative amount (−৳100, −৳150, −৳100). They are still made to order, so the ready date still applies.
 
-**Made to measure needs no S, M or L.** The Fit option "Made to your measurements" is marked `needs_measurements`. Choosing it swaps the size buttons for four number boxes (only the bust is required; waist, sleeve length and length are optional, because not every piece needs them), and hides the "2 inches shorter/longer" options, because the piece is cut to the exact length typed. `orders.py` then stores the size as "Made to measure" and writes the checked measurements into the order for the tailor. The panel also compares the measurements with the size guide: if a standard size already fits within 2 inches, it says so and offers to order that size and save the ৳300 charge. A changed length or sleeve length can only be sewn to order, so then it doesn't offer a standard size. A shop that tells customers when they don't need the paid option earns trust.
+**Made to measure needs no S, M or L.** `orders.py` stores the size as "Made to measure" and writes the checked measurements into the order for the tailor. The panel also compares the measurements with the size guide: if a standard size already fits within 2 inches, it says so and offers to order that size ready-made, which ships without the sewing wait. A changed length or sleeve length can only be sewn to order, so then it doesn't offer a standard size.
 
-**From the chat.** If a customer says "Shefali, sleeveless, length 36, bust 38", profile rule 8 makes the assistant end its answer with `[CUSTOMIZE product_id=SR-002; sleeves=Sleeveless; bust=38; length=36]`. `read_customize()` in `services/chat.py` keeps only what the shop can make (a sleeve this piece offers, measurements within the ranges in `pricing.MEASUREMENTS`) and the chat shows a "See the price and finish" button. It opens the product page with those choices filled in. The chat never prices a custom piece: the product page does, through `pricing.py`.
+**From the chat.** If a customer says "Shefali, sleeveless, length 36, bust 38", profile rule 8 makes the assistant end its answer with `[CUSTOMIZE product_id=SR-002; sleeves=Sleeveless; bust=38; length=36]`. `read_customize()` in `services/chat.py` keeps only what the shop can make (a sleeve this piece offers, measurements within the ranges in `pricing.MEASUREMENTS`) and the chat shows a "See the price and finish" button. It opens the product page with those choices filled in. The chat never prices a custom piece: the product page does, through `pricing.py`. A sleeve no number can say, such as "Sleeveless", is carried along without a button and appears in the price box; a sleeve length typed on the page replaces it.
 
 **A reference picture for the tailor.** Under the notes box a customer can attach a photo or sketch. It is uploaded as soon as it is chosen (`POST /api/reference-pictures`), because the bag lives in the browser and can't hold a file. Flask checks the type and size, saves it in `backend/uploads/` under a random name, and returns that name; the order line then carries it. At checkout `orders.py` accepts the name only if that file really exists and the line is made to order, so a made-up name is ignored. The picture is opened through an owner-only route (`/api/owner/custom-orders/<id>/reference-picture`), and the owner sees a thumbnail in the custom order queue. Uploads are limited per visitor per day like messages and previews.
 
-**Typed measurements never change the price.** The price comes only from the options chosen. If a customer types measurements without choosing an option, the panel says the note won't be sent and offers "Made to your measurements" (+৳600) in one click. Without an option the order is a standard-size piece at the listed price.
+**Only the numbers change the price, never the notes or the picture.** Notes and a reference picture go with pieces made to order only; without measurements the panel says they won't be sent and that the standard size is ordered at the listed price.
 
 Both columns are optional. A product without them keeps the full menu and simply can't show results. The sleeve match compares words, so the CSV must use the same words as the option labels ("Short" for "Short sleeves").
 
@@ -270,7 +278,7 @@ Run them from `backend/`:
 uv run pytest
 ```
 
-There are 129 tests. They use the fake clients, so they need no keys, cost nothing and run in seconds. They cover response parsing (including the `detail` wrapper and string scores), Chorus polling and timeouts, pricing rules, checkout that ignores tampered prices, the unanswered flag, the owner login wall, CSV import errors, and the image preview (the prompt, the order of reference pictures, and every refusal).
+There are 133 tests. They use the fake clients, so they need no keys, cost nothing and run in seconds. They cover response parsing (including the `detail` wrapper and string scores), Chorus polling and timeouts, pricing rules, checkout that ignores tampered prices, the unanswered flag, the owner login wall, CSV import errors, and the image preview (the prompt, the order of reference pictures, and every refusal).
 
 ## 7. Known limits and next steps
 
