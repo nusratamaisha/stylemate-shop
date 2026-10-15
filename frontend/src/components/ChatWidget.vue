@@ -199,6 +199,8 @@ watch(
                   <span class="card-name">{{ product.name }}</span>
                   <span class="card-price">{{ formatTaka(product.price_bdt) }}</span>
                   <span v-if="!product.in_stock" class="tag out">Out of stock</span>
+                  <!-- The whole card is the link; this line tells customers so -->
+                  <span class="card-cta">Click to view more details →</span>
                 </span>
               </RouterLink>
             </div>
@@ -387,6 +389,8 @@ watch(
 .card-text { display: flex; flex-direction: column; line-height: 1.3; }
 .card-name { font-weight: 600; font-size: var(--step--1); }
 .card-price { color: var(--muted); font-size: var(--step--1); }
+.card-cta { margin-top: 2px; color: var(--sindoor-deep); font-size: var(--step--1); font-weight: 600; }
+.card:hover .card-cta { text-decoration: underline; }
 
 .order {
   margin-top: 10px;

@@ -98,7 +98,7 @@ Each file has one job. If you know what you want to change, this table tells you
    - **Product cards:** products whose full name appears in the answer become cards, in the order mentioned.
    - **Unanswered flag:** if the best `similarity_score` is below 30, the question is marked as not answered by the catalogue. In testing, a real match scored about 42 and "Do you sell shoes?" scored under 24.
    - The question and answer are saved as a `ChatTurn` row.
-7. The widget shows the answer (Markdown rendered safely) and the product cards.
+7. The widget shows the answer (Markdown rendered safely) and the product cards. Each card links to its product page and ends with "Click to view more details →", a call to action that shows customers the card can be clicked.
 
 ### A2. A customer orders from the chat
 
