@@ -3,7 +3,7 @@
 import io
 
 from stylemate.extensions import db
-from stylemate.models import ChatTurn
+from stylemate.models import ChatTurn, Product
 from stylemate.services.chat import is_answered, mentioned_products
 from stylemate.services.catalog import list_products
 
@@ -95,13 +95,54 @@ def test_confirmed_order_is_checked_and_returned_without_the_marker(client, mair
     assert "[ORDER" not in db.session.scalar(db.select(ChatTurn)).answer
 
 
-def test_order_for_a_size_the_piece_does_not_come_in_is_refused(client, maira):
+def test_a_size_the_piece_does_not_come_in_is_left_for_the_chat_to_ask(client, maira):
     maira.answer = ORDER_ANSWER.replace("size=s", "size=XXL")
     data = client.post("/api/chat", json={"message": "yes"}).get_json()
 
-    assert data["order"] is None
-    assert "I couldn't start that order" in data["answer"] and "S, M, L" in data["answer"]
+    order = data["order"]
+    assert (order["size"], order["colour"]) == ("", "Emerald")  # the chat asks for the size
+    assert order["sizes"] == ["S", "M", "L"] and order["colours"] == ["Maroon", "Emerald"]
     assert "[ORDER" not in data["answer"]
+
+
+def test_an_order_can_start_with_only_the_product(client, maira):
+    maira.answer = "Lovely! Let's set it up.\n[ORDER product_id=SR-003; size=; colour=; quantity=1]"
+    order = client.post("/api/chat", json={"message": "I want to order Bela"}).get_json()["order"]
+
+    assert (order["product"]["code"], order["size"], order["colour"]) == ("SR-003", "", "")
+    assert order["changes"] == []  # Bela isn't customizable, so the chat asks no change questions
+
+
+def test_a_piece_with_one_colour_needs_no_colour_question(client, maira):
+    product = db.session.scalar(db.select(Product).where(Product.code == "SR-003"))
+    product.colours = "Yellow"
+    db.session.commit()
+    maira.answer = "Sure!\n[ORDER product_id=SR-003; size=M; colour=; quantity=1]"
+    order = client.post("/api/chat", json={"message": "order it"}).get_json()["order"]
+
+    assert (order["size"], order["colour"]) == ("M", "Yellow")
+
+
+def test_the_chat_offers_changes_but_not_made_to_measure(client, maira):
+    maira.answer = ORDER_ANSWER
+    order = client.post("/api/chat", json={"message": "yes, order it"}).get_json()["order"]
+
+    groups = {group["group"]: [option["label"] for option in group["options"]] for group in order["changes"]}
+    assert "Shorter by 2 inches" in groups["Length"]
+    assert "Fit" not in groups  # made to measure needs measurement boxes, so it stays on the product page
+
+
+def test_an_order_starts_even_when_the_assistant_forgets_its_order_line(client, maira):
+    # What happened on Oct 15: the model kept asking "Would you like it in Yellow?" instead
+    maira.answer = "Would you like the **Bela Tiered Sundress** in Mustard?"
+    order = client.post("/api/chat", json={"message": "i want to order it in size m"}).get_json()["order"]
+
+    assert (order["product"]["code"], order["size"], order["colour"]) == ("SR-003", "M", "")
+
+
+def test_no_order_starts_without_a_request_to_order(client, maira):
+    maira.answer = "Try the **Bela Tiered Sundress**."
+    assert client.post("/api/chat", json={"message": "something for summer?"}).get_json()["order"] is None
 
 
 def test_order_for_an_out_of_stock_piece_is_refused(client, maira):
