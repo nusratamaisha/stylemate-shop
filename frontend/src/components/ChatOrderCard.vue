@@ -1,22 +1,54 @@
 <script setup>
-// A piece the customer agreed to order in the chat, already checked by Flask (services/chat.py, read_order).
-// Like a shop answering on Messenger, the customer can finish the order right here: the card asks for
-// delivery, payment and contact details and confirms it, without leaving the chat. "Go to checkout"
-// still works as before. Either way the order goes through POST /api/orders, which prices it again.
-import { reactive, ref, useId } from 'vue'
+// The finished order at the end of the stylist's follow-up questions (stores/chat.js, utils/chatOrder.js).
+// It shows what the customer chose with the shop's price, then either fills the bag and opens
+// checkout, or, like a shop answering on Messenger, takes the delivery details right here.
+// Either way the order goes through POST /api/orders, which checks and prices it again.
+import { computed, reactive, ref, useId, watchEffect } from 'vue'
 import { api } from '../api.js'
 import CheckoutFields from './CheckoutFields.vue'
 import { refreshProducts } from '../stores/shop.js'
-import { formatTaka } from '../utils/format.js'
+import { chosenOptionIds } from '../utils/chatOrder.js'
+import { formatTaka, readyDate } from '../utils/format.js'
 
 const props = defineProps({
-  order: { type: Object, required: true }, // { product, size, colour, quantity, unit_price_bdt }
+  draft: { type: Object, required: true }, // { order, size, colour, quantity, changes }
   inBag: { type: Boolean, default: false },
 })
-const emit = defineEmits(['checkout'])
+const emit = defineEmits(['checkout', 'restart'])
 
-const idPrefix = `chat-order-${useId()}` // one chat can hold several order cards, so field ids must differ
+const product = computed(() => props.draft.order.product)
+const optionIds = computed(() => chosenOptionIds(props.draft))
 
+// With changes, the price and the ready date come from Flask (pricing.py), never from the browser.
+const quote = ref(null)
+const quoteError = ref('')
+watchEffect(async () => {
+  if (!optionIds.value.length) return (quote.value = null)
+  try {
+    quote.value = await api('/price-quote', { method: 'POST', body: { product_code: product.value.code, option_ids: optionIds.value } })
+  } catch (err) {
+    quoteError.value = err.message
+  }
+})
+const unitPrice = computed(() => quote.value?.total_bdt ?? product.value.price_bdt)
+const pricing = computed(() => optionIds.value.length && !quote.value) // waiting for the quote
+
+// The line as the bag and the order expect it
+const item = computed(() => ({
+  product_code: product.value.code,
+  name: product.value.name,
+  image_url: product.value.image_url,
+  colours: product.value.colours,
+  size: props.draft.size,
+  colour: props.draft.colour,
+  quantity: props.draft.quantity,
+  option_ids: optionIds.value,
+  custom_details: quote.value?.details || '',
+  notes: '',
+  unit_price_bdt: unitPrice.value, // shown in the bag; checkout recalculates it
+}))
+
+const idPrefix = `chat-order-${useId()}` // one chat can hold several orders, so field ids must differ
 const step = ref('summary') // 'summary' -> 'details' -> 'done'
 const customer = reactive({ name: '', phone: '', address: '', delivery_area: '' })
 const payment = reactive({ method: '', transaction_id: '' })
@@ -28,14 +60,14 @@ async function confirmOrder() {
   error.value = ''
   placing.value = true
   try {
-    const { product, size, colour, quantity } = props.order
+    const { product_code, size, colour, quantity, option_ids } = item.value
     confirmation.value = await api('/orders', {
       method: 'POST',
       body: {
         source: 'chat', // the owner sees a "Chat" badge on it in the Orders tab
         customer,
         payment,
-        items: [{ product_code: product.code, size, colour, quantity }], // no price: the server works it out
+        items: [{ product_code, size, colour, quantity, option_ids }], // no price: the server works it out
       },
     })
     step.value = 'done'
@@ -51,24 +83,25 @@ async function confirmOrder() {
 <template>
   <div class="order">
     <p class="order-summary">
-      <strong>{{ order.product.name }}</strong><br />
-      Size {{ order.size }}, {{ order.colour }}<span v-if="order.quantity > 1">, {{ order.quantity }} pieces</span>
-      · {{ formatTaka(order.unit_price_bdt * order.quantity) }}
+      <strong>{{ product.name }}</strong><br />
+      Size {{ draft.size }}, {{ draft.colour }}<span v-if="draft.quantity > 1">, {{ draft.quantity }} pieces</span><br />
+      <span v-if="quote?.details" class="changes">{{ quote.details }}<br /></span>
+      <strong>{{ pricing ? 'Working out the price…' : formatTaka(unitPrice * draft.quantity) }}</strong>
+      <span v-if="quote?.ready_in_days" class="muted"> · made to order, ready around {{ readyDate(quote.ready_in_days) }}</span>
     </p>
+    <p v-if="quoteError" class="message error" role="alert">{{ quoteError }}</p>
 
-    <template v-if="step === 'summary'">
-      <div class="actions">
-        <button type="button" class="button small" @click="step = 'details'">Order here in the chat</button>
-        <button type="button" class="text-button small" @click="emit('checkout')">
-          {{ inBag ? 'Back to checkout' : 'Or go to checkout' }}
-        </button>
-      </div>
-    </template>
+    <div v-if="step === 'summary'" class="actions">
+      <button type="button" class="button small" :disabled="pricing" @click="emit('checkout', item)">
+        {{ inBag ? 'Back to checkout' : 'Go to checkout' }}
+      </button>
+      <button type="button" class="text-button small" :disabled="pricing" @click="step = 'details'">Or confirm here in the chat</button>
+      <button type="button" class="text-button small" @click="emit('restart')">Change my answers</button>
+    </div>
 
     <form v-else-if="step === 'details'" class="details" @submit.prevent="confirmOrder">
       <p class="order-note">A few details to send your order:</p>
-      <CheckoutFields :customer="customer" :payment="payment" :subtotal="order.unit_price_bdt * order.quantity"
-        :id-prefix="idPrefix" />
+      <CheckoutFields :customer="customer" :payment="payment" :subtotal="unitPrice * draft.quantity" :id-prefix="idPrefix" />
       <p v-if="error" class="message error" role="alert">{{ error }}</p>
       <div class="actions">
         <button type="submit" class="button small" :disabled="placing">
@@ -104,9 +137,10 @@ async function confirmOrder() {
   background: #fff;
   border: 1px solid var(--line);
 }
-.order-summary { margin: 0 0 10px; font-size: var(--step--1); line-height: 1.4; }
+.order-summary { margin: 0 0 10px; font-size: var(--step--1); line-height: 1.5; }
+.changes { color: var(--muted); }
 .order-note { margin: 8px 0; font-size: var(--step--1); color: var(--muted); }
-.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 8px; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 8px; }
 .details { margin-top: 4px; font-size: var(--step--1); }
 .done p { margin: 0 0 6px; font-size: var(--step--1); }
 .done strong { color: var(--sindoor-deep); }

@@ -31,24 +31,11 @@ function goToCustomize(message) {
 const describeCustomize = ({ sleeves, measurements }) =>
   [sleeves, ...Object.entries(measurements).map(([name, inches]) => `${name.replace('_', ' ')} ${inches} in`)].filter(Boolean).join(' · ')
 
-// The customer confirmed an order in the chat and Flask checked it. ChatOrderCard lets them finish it
-// in the chat; its "Go to checkout" link lands here, puts the piece in the bag and opens the checkout page.
-function goToCheckout(message) {
-  const order = message.order
+// An order started in the chat: once the stylist's questions are answered, ChatOrderCard shows the
+// summary. Its "Go to checkout" lands here: the piece goes in the bag and the checkout page opens.
+function goToCheckout(message, item) {
   if (!message.inBag) {
-    bag.add({
-      product_code: order.product.code,
-      name: order.product.name,
-      image_url: order.product.image_url,
-      colours: order.product.colours,
-      size: order.size,
-      colour: order.colour,
-      quantity: order.quantity,
-      option_ids: [],
-      custom_details: '',
-      notes: '',
-      unit_price_bdt: order.unit_price_bdt,
-    })
+    bag.add(item)
     message.inBag = true // pressing the link again must not add a second one
   }
   chat.state.open = false // so the checkout form isn't hidden behind the chat
@@ -167,9 +154,18 @@ watch(
             <span v-if="message.viaVoice" class="spoken">Spoken</span>
           </div>
 
-          <div v-else class="bubble stylist" :class="{ wide: message.order }">
+          <div v-else class="bubble stylist" :class="{ wide: message.draftId && !message.question }">
             <div class="answer" v-html="renderMarkdown(message.text)"></div>
-            <ChatOrderCard v-if="message.order" :order="message.order" :in-bag="message.inBag" @checkout="goToCheckout(message)" />
+            <!-- A follow-up question for an order: tap an answer, or type it -->
+            <div v-if="message.question" class="choices" role="group" :aria-label="message.text">
+              <button v-for="choice in message.question.choices" :key="String(choice.value)" type="button" class="choice"
+                :class="{ picked: message.answered === choice.label }" :disabled="message.answered !== null"
+                @click="chat.answer(message, choice)">
+                {{ choice.label }}<span v-if="choice.note" class="choice-note"> {{ choice.note }}</span>
+              </button>
+            </div>
+            <ChatOrderCard v-else-if="message.draftId" :draft="chat.state.drafts[message.draftId]" :in-bag="message.inBag"
+              @checkout="(item) => goToCheckout(message, item)" @restart="chat.restartOrder(message.draftId)" />
             <div v-else-if="message.customize" class="order">
               <p class="order-summary">
                 <strong>{{ message.customize.product.name }}</strong>, made for you<br />
@@ -334,6 +330,23 @@ watch(
   cursor: pointer;
 }
 .suggestion:hover { border-color: var(--sindoor); }
+
+/* Answers to the stylist's follow-up questions */
+.choices { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.choice {
+  padding: 6px 12px;
+  border: 1px solid var(--sindoor);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--sindoor-deep);
+  font: inherit;
+  font-size: var(--step--1);
+  cursor: pointer;
+}
+.choice:hover:not(:disabled) { background: var(--sindoor-wash); }
+.choice:disabled { cursor: default; opacity: 0.45; }
+.choice.picked { opacity: 1; background: var(--sindoor); color: #fff; }
+.choice-note { font-weight: 600; }
 
 .bubble { max-width: 88%; }
 .bubble.wide { max-width: 100%; } /* room for the order form */
