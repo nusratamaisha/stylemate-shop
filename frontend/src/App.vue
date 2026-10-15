@@ -68,6 +68,12 @@ const firstName = computed(() => {
         Our stylist answers only from this shop’s catalogue, so it won’t guess.<br />
         <RouterLink to="/help">FAQ and contact</RouterLink> · <RouterLink to="/size-guide">Size guide</RouterLink>
       </p>
+      <!-- The product photos belong to Daam Koto and are used with their permission (docs/photo-credits.md). -->
+      <p class="credit small muted">
+        Product photos by
+        <a href="https://www.facebook.com/daamkoto001" target="_blank" rel="noopener">Daam Koto</a>,
+        used with their permission.
+      </p>
     </div>
   </footer>
 
@@ -210,6 +216,13 @@ main {
   flex-wrap: wrap;
   padding-top: 32px;
   padding-bottom: 32px;
+}
+.credit {
+  flex-basis: 100%;
+  max-width: none;
+  margin: 0;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15); /* the footer is dark, so a faint light line */
 }
 .foot.with-chat {
   padding-bottom: 96px; /* room for the chat button */

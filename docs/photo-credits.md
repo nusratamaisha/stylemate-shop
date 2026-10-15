@@ -2,7 +2,7 @@
 
 All product photos were saved from one clothing shop's Facebook page: SR-017 to SR-042 on October 13, 2026, and SR-043 to SR-061 on October 14, 2026. Facebook gives no licence to reuse photos, so they may be used only with that shop's permission. The photos themselves are not in Git (`data/images/` is ignored).
 
-- **Page:** (Daam koto)[https://www.facebook.com/daamkoto001]
+- **Page:** [Daam Koto](https://www.facebook.com/daamkoto001). The website footer credits them on every page.
 - **Permission:** asked on October 13, 2026; granted (reported on October 14, 2026). Fill in the date of the reply, keep a screenshot of it, and note whether it covers a public demo or only the internship.
 - Some photos show the maker's label inside the neck.
 
@@ -29,21 +29,21 @@ All product photos were saved from one clothing shop's Facebook page: SR-017 to 
 | SR-035 | Megh Pleated Maxi Skirt | `638870147_1531700485628175_3374421268458060028_n.jpg` |
 | SR-036 | Bindu Polka Dot Palazzo | `772863060_1701115062020049_3406816655929188625_n.jpg` |
 | SR-037 | Gulabi Embroidered Kurti and Palazzo Set | `717790328_1634736508657905_6229263418441347933_n.jpg` |
-| SR-038 | Rupa Pintuck Top and Flared Pants Set | `740215754_1659408902857332_2258465274429513073_n.jpg` |
+| SR-038 | Rupa Top and Flared Pants Set | `740215754_1659408902857332_2258465274429513073_n.jpg` |
 | SR-039 | Shapla Three-Piece Set | `746350925_1668760418588847_9004790466976044772_n.jpg` |
 | SR-040 | Komola Polka Dot Frill Set | `800780249_1729659362498952_8196165650229328550_n.jpg` |
 | SR-041 | Jharna Embroidered Kurti Set | `825292251_1456348919713304_1074478648799747808_n.jpeg` |
 | SR-042 | Neel Pinstripe Shirt and Pants Set | `828692484_1744440201020868_6413133917467551149_n.jpg` |
 | SR-043 | Jaba Swiss-Dot Chiffon Dress | `677169216_1587796353351921_8440652959838889109_n.jpg` |
-| SR-044 | Nisha Ric-Rac Sleeveless Maxi Dress | `678383385_1587796203351936_2929293171458979486_n.jpg` |
+| SR-044 | Nisha Sleeveless Maxi Dress | `678383385_1587796203351936_2929293171458979486_n.jpg` |
 | SR-045 | Champa Embroidered Collar Dress | `679036907_1587796310018592_2759259310535013240_n.jpg` |
 | SR-046 | Doel Floral Yoke Dress | `679438165_1587795966685293_1640167961772222154_n.jpg` |
 | SR-047 | Aparajita Puff-Sleeve Floral Dress | `680401684_1592575806207309_5972126620331024785_n.jpg` |
 | SR-048 | Kamini Ditsy Floral Ruffle Dress | `681457372_1592575826207307_3441168598284104041_n.jpg` |
-| SR-049 | Surjo Flower-Patch Shirt Dress | `687302375_1597420362389520_8015031580694806300_n.jpg` |
+| SR-049 | Surjo Flower-Patch Shirt Top | `687302375_1597420362389520_8015031580694806300_n.jpg` |
 | SR-050 | Polash Embroidered Flower Dress | `720677420_1633755758755980_4315382396001363955_n.jpg` |
 | SR-051 | Shishir Eyelet Tiered Dress | `730373617_1650537737077782_7511303501411153778_n.jpg` |
-| SR-052 | Nodi Printed Panel Maxi Dress | `739699247_1660332756098280_6734102871691218132_n.jpg` |
+| SR-052 | Lilac Printed Panel Maxi Dress | `739699247_1660332756098280_6734102871691218132_n.jpg` |
 | SR-053 | Pata Leaf-Cutwork Tunic | `813467461_1733755265422695_8149178906759155444_n.jpg` |
 | SR-054 | Taara Night-Sky Palazzo | `836221673_1751250483673173_3886284134704095293_n.jpg` |
 | SR-055 | Shondha Three-Piece Set | `768230363_1693905719407650_1902966881623695474_n.jpg` |
