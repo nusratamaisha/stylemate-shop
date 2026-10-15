@@ -102,19 +102,22 @@ Each file has one job. If you know what you want to change, this table tells you
 
 ### A2. A customer orders from the chat
 
-The customer picks a piece, a size and a colour in conversation, says "yes, order it", and finishes the order without leaving the chat, the way a shop answers on Messenger. The old way, "Go to checkout", still works too.
+The customer says "I want to order Jui". The stylist asks a few quick questions in the chat (size, colour, and for a customizable piece any changes such as length or sleeves), fills in the order and takes them to checkout. They can also confirm it right there in the chat, the way a shop answers on Messenger.
 
-1. Rule 7 of the Maira profile (`docs/maira-profile.md`) tells the assistant to collect the product, size and colour, and, once the customer confirms, to end its answer with one marker line: `[ORDER product_id=SR-002; size=S; colour=Emerald; quantity=1]`.
-2. `read_order()` in `services/chat.py` takes that line out of the answer, so the customer never sees it, and checks every part against the database: the product exists in this shop, it comes in that size and colour, and enough is in stock.
-3. If it all holds, the reply carries an `order` with the shop's own spelling and the price **from the database**. If not, there is no order and the answer says why ("comes in S, M, L").
-4. `ChatWidget.vue` shows the assistant's message with `ChatOrderCard.vue`: a summary (piece, size, colour, price) and two choices.
-   - **"Order here in the chat"** opens a small form inside the chat: delivery area, payment (cash on delivery, or a bKash/Nagad/Rocket TrxID), name, phone and address. A logged-in customer's name and phone are filled in. "Confirm order" sends it to the same `POST /api/orders` as the checkout page, with `source: "chat"`. The card then shows the order number, the total with delivery, and how payment works.
-   - **"Or go to checkout"** adds the piece to the bag, closes the chat and opens `/bag`, as before.
-5. Either way, `orders.place_order()` checks and prices the order exactly as in journey D: sizes, colours, stock, delivery charge and payment. The only difference is `Order.source` (`website` or `chat`), which the owner sees as a **Chat** badge in the Orders tab, and `sales_summary()` counts as `chat_orders`, so the shop can see how much the assistant sells.
+1. Rule 7 of the Maira profile (`docs/maira-profile.md`) tells the assistant to start the order **as soon as** the customer wants it, with only what it already knows, on a last marker line: `[ORDER product_id=SR-023; size=M; colour=; quantity=1]`. It doesn't ask the questions itself: on Oct 15 the model kept asking "Would you like it in Yellow?" and never wrote the line, so the customer could never order.
+2. `read_order()` in `services/chat.py` takes that line out of the answer, so the customer never sees it, and checks it against the database: the product exists in this shop and is in stock. A size or colour the piece doesn't come in is left empty, and a piece with only one size or colour gets it filled in.
+3. **Safety net:** if the assistant forgets the line, `order_from_question()` still starts the order when the customer's message asks to order ("order", "buy", "kinbo", "অর্ডার"…) and the answer is about exactly one product.
+4. The reply's `order` lists what can still be chosen: `sizes`, `colours`, and `changes` (the product page's menu from `pricing.options_for()`, without made to measure, which needs measurement boxes and stays on the product page, rule 8).
+5. `stores/chat.js` asks the missing questions one by one, as stylist messages with tap-to-answer buttons; the rules for which question comes next are in `utils/chatOrder.js`. A typed answer such as "M", "yellow" or "no" is matched to the buttons and **not** sent to Maira, so the questions cost no AI calls and can't loop.
+6. When nothing is missing, `ChatOrderCard.vue` shows the order with its price. With changes, the price and the ready date come from `POST /api/price-quote` (`pricing.py`), never from the browser. Then:
+   - **"Go to checkout"** puts the piece in the bag, with its changes, and opens `/bag`.
+   - **"Or confirm here in the chat"** opens a small form in the chat (delivery area, payment, name, phone, address) and sends it to the same `POST /api/orders` with `source: "chat"`.
+   - **"Change my answers"** asks the questions again.
+7. Either way, `orders.place_order()` checks and prices the order exactly as in journey D. A chat-confirmed order has `Order.source = "chat"`, which the owner sees as a **Chat** badge in the Orders tab and `sales_summary()` counts as `chat_orders`.
 
-The form's fields live in `CheckoutFields.vue`, shared by the checkout page and the chat card, so both ask the same questions and show the same total (DRY: pulled out when the chat became the second place to order).
+The checkout fields live in `CheckoutFields.vue`, shared by the checkout page and the chat card (DRY: pulled out when the chat became the second place to order).
 
-**Why a marker and not "let the AI place the order":** the assistant only *proposes*. It can't create an order, set a price or skip the stock check, because Flask does those. A wrong or invented marker is refused. The delivery details are typed into a form, even inside the chat, not written to the assistant, so a phone number or address never passes through Maira and can't be misread by it. Customized pieces are still ordered on the product page, where the price of each change is shown.
+**Why a marker and not "let the AI place the order":** the assistant only *proposes*. It can't create an order, set a price or skip the stock check, because Flask does those. A wrong or invented marker is refused. The delivery details are typed into a form, even inside the chat, not written to the assistant, so a phone number or address never passes through Maira and can't be misread by it. Changes chosen in the chat are priced by `pricing.py` like on the product page; only made to measure stays on the product page.
 
 ### B. A customer asks by voice
 
@@ -267,7 +270,7 @@ Run them from `backend/`:
 uv run pytest
 ```
 
-There are 118 tests. They use the fake clients, so they need no keys, cost nothing and run in seconds. They cover response parsing (including the `detail` wrapper and string scores), Chorus polling and timeouts, pricing rules, checkout that ignores tampered prices, the unanswered flag, the owner login wall, CSV import errors, and the image preview (the prompt, the order of reference pictures, and every refusal).
+There are 123 tests. They use the fake clients, so they need no keys, cost nothing and run in seconds. They cover response parsing (including the `detail` wrapper and string scores), Chorus polling and timeouts, pricing rules, checkout that ignores tampered prices, the unanswered flag, the owner login wall, CSV import errors, and the image preview (the prompt, the order of reference pictures, and every refusal).
 
 ## 7. Known limits and next steps
 

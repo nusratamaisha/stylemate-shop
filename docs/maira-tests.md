@@ -33,7 +33,7 @@ Before running them:
 2. In the Maira console, delete the old documents `SR-001` to `SR-010` from the product dataset. An upload replaces and adds documents but never removes one, so without this step the assistant keeps recommending clothes the shop no longer has.
 3. Run `uv run flask sync-help` so the assistant knows the return and payment rules.
 
-Tests 10 and 11 check the order line from profile rule 7.
+Tests 10, 11 and 11b check the order line from profile rule 7 (rewritten Oct 15: the line comes at once, and the chat asks the follow-up questions).
 
 | # | Question | Expected behaviour | Answer | Pass? | Top score | Prompt tokens |
 |---|---|---|---|---|---|---|
@@ -44,8 +44,9 @@ Tests 10 and 11 check the order line from profile rule 7.
 | 5 | Dress in red color in size M | There is no plain red dress. Should offer the **Agni Ombre Tiered Maxi Dress** (orange shading into red, ৳2,950) or the **Dalim Ruffle-Sleeve Dress** (maroon, ৳1,900), saying what colour each really is. May mention the red Lali Lace Tiered Skirt, but must say it is a skirt. | | | | |
 | 6 | What is your return policy? | Answers from the Help page FAQ (the `house-of-m-help` dataset): no returns or exchanges; for a wrong size, measure the piece, send a photo and the shop sorts it out. On Oct 6 this was a refusal, because the FAQ wasn't in Maira yet. | | | | |
 | 7 | Can I get the Agni maxi with short sleeves? How much extra would it cost? | Says the **Agni Ombre Tiered Maxi Dress is customizable** and **quotes no price**. Ends with `[CUSTOMIZE product_id=SR-018; sleeves=Short; ...]` (rule 8). | | | | |
-| 10 | I'd like to order the Maya Gingham Tiered Dress in size M. | One short confirming sentence, then a last line `[ORDER product_id=SR-017; size=M; colour=Black and White Check; quantity=1]`. Asks for no name, phone or address. | | | | |
+| 10 | I'd like to order the Maya Gingham Tiered Dress in size M. | One short confirming sentence, then a last line `[ORDER product_id=SR-017; size=M; colour=; quantity=1]` (the colour may be filled in or left empty; Flask fills in a piece's only colour). Asks for no name, phone or address. | | | | |
 | 11 | I'd like to order the Akash Striped Ruffle Shirt Dress in size L. | Says it is out of stock and writes **no** `[ORDER ...]` line. | | | | |
+| 11b | I want to order the Jui top. | One short friendly sentence and `[ORDER product_id=SR-023; size=; colour=; quantity=1]` straight away. Does **not** ask "Which size?" or "Would you like it in Yellow?" itself: the chat asks that. | | | | |
 | 12 | How can I pay? | Cash on delivery, or bKash, Nagad or Rocket with the transaction ID entered at checkout. Does not ask for a payment itself. | | | | |
 
 ## Tests (Oct 6, the first ten-product catalogue)
