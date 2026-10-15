@@ -27,7 +27,10 @@ ORDER_MARKER = re.compile(r"\[ORDER\b([^\]]*)\]", re.IGNORECASE)
 CUSTOMIZE_MARKER = re.compile(r"\[CUSTOMIZE\b([^\]]*)\]", re.IGNORECASE)
 # A customer asking to order, in English, Banglish or Bangla. Used only when the assistant
 # forgot its order line, so a clear "I want to order it" still starts the order.
-ORDER_WORDS = re.compile(r"\b(order|buy|purchase|checkout|kinbo|kinte|nibo|nebo)\b|অর্ডার|কিনব|নেব", re.IGNORECASE)
+ORDER_WORDS = re.compile(
+    r"\b(order|buy|purchase|checkout|kinbo|kinte|nibo|nebo)\b"
+    r"|\b(want to|wanna|i'?ll|i will|let me|i'?d like to) (take|have|get)\b|\b(nite|kinte) chai\b"
+    r"|অর্ডার|কিনব|নেব", re.IGNORECASE)
 # ...but not a question about ordering ("tumi ki customized order nite paro na?", "how do I order?"),
 # and not a made-for-you piece, which rule 8 and the product page handle. The assistant answers those.
 NOT_AN_ORDER = re.compile(
@@ -120,7 +123,7 @@ class ChatService:
         answer, customize = read_customize(tenant, catalogue, answer)
         products = mentioned_products(catalogue, answer)
         if order is None and customize is None:
-            order = order_from_question(tenant, question, products)
+            order = order_from_question(tenant, question, products, _previous_answer(tenant, session_id), catalogue)
 
         db.session.add(ChatTurn(
             tenant_id=tenant.id,
@@ -156,20 +159,50 @@ def read_order(tenant: Tenant, products: list[Product], answer: str) -> tuple[st
         return f"{text}\n\nI couldn't start that order: {problem}".strip(), None
 
 
-def order_from_question(tenant: Tenant, question: str, mentioned: list[Product]) -> ChatOrder | None:
-    """A safety net for when the assistant didn't write its order line.
+def order_from_question(tenant: Tenant, question: str, mentioned: list[Product],
+                        previous_answer: str = "", catalogue: list[Product] | None = None) -> ChatOrder | None:
+    """A safety net for when the assistant didn't write its order line. Two cases start the order:
 
-    If the customer clearly asked to order and the answer is about exactly one product,
-    start the order for that product anyway; the chat asks for the rest. Without this,
-    a model that keeps asking "Would you like it in Yellow?" never lets the customer order.
+    - The customer clearly asked to order ("I want to take it", "eta order korte chai") and the
+      answer is about exactly one product. Without this, a model that keeps asking
+      "Would you like it in Yellow?" never lets the customer order.
+    - The stylist's previous answer was about one product and asked for a size, and the customer
+      replied with just a size ("M"). Maira searches the shop's data with the latest message only,
+      so after "M" it may no longer see the product's ID and can't write the line (Oct 15).
+
+    The chat then asks for whatever is still missing.
     """
-    if len(mentioned) != 1 or not ORDER_WORDS.search(question) or NOT_AN_ORDER.search(question):
+    size_reply = _size_reply(question, mentioned_products(catalogue or [], previous_answer), previous_answer)
+    if size_reply:
+        product, size = size_reply
+    elif len(mentioned) == 1 and ORDER_WORDS.search(question) and not NOT_AN_ORDER.search(question):
+        product, size = mentioned[0], SIZE_IN_TEXT.search(question)
+        size = size.group(1) if size else ""
+    else:
         return None
-    size = SIZE_IN_TEXT.search(question)
     try:
-        return _check_order(tenant, mentioned, {"product_id": mentioned[0].code, "size": size.group(1) if size else ""})
+        return _check_order(tenant, [product], {"product_id": product.code, "size": size})
     except UserInputError:
         return None  # sold out: the assistant's own answer already says so
+
+
+def _size_reply(question: str, previous: list[Product], previous_answer: str) -> tuple[Product, str] | None:
+    """("M", answer "…which size would you like?" about one product) -> (that product, "M")."""
+    if len(previous) != 1 or "size" not in previous_answer.lower():
+        return None
+    typed = re.sub(r"^size\s+", "", question.strip().rstrip(".!"), flags=re.IGNORECASE)
+    size = _matching(previous[0].size_list, typed)
+    return (previous[0], size) if size else None
+
+
+def _previous_answer(tenant: Tenant, session_id: str | None) -> str:
+    """The stylist's last answer in this conversation, or "" for a new one."""
+    if not session_id:
+        return ""
+    return db.session.scalar(
+        db.select(ChatTurn.answer).where(ChatTurn.tenant_id == tenant.id, ChatTurn.session_id == session_id)
+        .order_by(ChatTurn.id.desc()).limit(1)
+    ) or ""
 
 
 def read_customize(tenant: Tenant, products: list[Product], answer: str) -> tuple[str, ChatCustomize | None]:
@@ -216,7 +249,10 @@ def _marker_fields(body: str) -> dict[str, str]:
 
 def _check_order(tenant: Tenant, products: list[Product], fields: dict[str, str]) -> ChatOrder:
     code = fields.get("product_id", "").lower()
-    product = next((item for item in products if item.code.lower() == code), None)
+    # The model may not see the ID (rule 7 lets it write product=<name> then), so the exact name works too
+    name = _normalise(fields.get("product") or fields.get("name") or "")
+    product = (next((item for item in products if code and item.code.lower() == code), None)
+               or next((item for item in products if name and _normalise(item.name) == name), None))
     if product is None:
         raise UserInputError("I couldn't find that product.")
     # A piece with only one size or one colour needs no question about it

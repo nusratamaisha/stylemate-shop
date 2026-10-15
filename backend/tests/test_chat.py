@@ -194,3 +194,29 @@ def test_customize_keeps_only_what_the_shop_can_make(client, maira):
     maira.answer = "Sure.\n[CUSTOMIZE product_id=SR-003; bust=38]"
     data = client.post("/api/chat", json={"message": "x"}).get_json()
     assert data["customize"] is None and "can't be customized" in data["answer"]
+
+
+def test_the_order_line_may_name_the_product_when_the_assistant_cant_see_its_id(client, maira):
+    maira.answer = "Lovely!\n[ORDER product=Bela Tiered Sundress; size=M; colour=; quantity=1]"
+    order = client.post("/api/chat", json={"message": "order it"}).get_json()["order"]
+    assert (order["product"]["code"], order["size"]) == ("SR-003", "M")
+
+
+def test_i_want_to_take_it_starts_the_order(client, maira):
+    maira.answer = "The ready-made **Bela Tiered Sundress** is in stock. Which size would you like?"
+    data = client.post("/api/chat", json={"message": "no i want to take the ready made one"}).get_json()
+    assert data["order"]["product"]["code"] == "SR-003"
+
+
+def test_a_size_given_after_the_stylist_asks_for_one_starts_the_order(client, maira):
+    # Oct 15: after "M" the assistant no longer saw the product's ID and asked for a link instead
+    maira.answer = "The **Bela Tiered Sundress** comes in XS, S, M and L. Which size would you like?"
+    client.post("/api/chat", json={"message": "tell me about bela", "session_id": "s1"})
+    maira.answer = "M is available. I don't have its product ID, so I can't start checkout yet."
+    order = client.post("/api/chat", json={"message": "M", "session_id": "s1"}).get_json()["order"]
+    assert (order["product"]["code"], order["size"]) == ("SR-003", "M")
+
+
+def test_a_size_alone_starts_nothing_in_a_new_conversation(client, maira):
+    maira.answer = "Which product do you mean?"
+    assert client.post("/api/chat", json={"message": "M"}).get_json()["order"] is None
