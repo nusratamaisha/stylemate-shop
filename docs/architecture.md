@@ -240,6 +240,13 @@ This covers two wishes with one flow. "Show me this dress with my changes" draws
 
 **Why only buyers can review:** a review from someone who never bought the piece tells the next customer nothing, and it is the cheapest protection against fake reviews.
 
+**Saved details, so nobody types them twice (Oct 15).** Checkout has a "Remember my details" tick box, ticked by default (`CheckoutFields.vue`).
+- **With an account**, a successful order with the box ticked saves the phone, address, delivery area and payment method on the `Customer` row (`accounts.remember_details()`, called inside `orders.place_order()` so it is saved with the order or not at all). It also keeps their last ready-made **size** and their last made-to-measure **measurements**. A transaction ID is never kept.
+- **A guest's** details stay only in their browser, on that device (`utils/savedDetails.js`, `localStorage`). Nothing reaches the shop until they order. Unticking the box makes the browser forget them.
+- Next time, checkout (on the page and in the chat) fills in only the empty fields. The product page picks the customer's usual size when the piece comes in it ("M is your usual size"). The measurement boxes offer "Use my saved measurements" rather than filling themselves in, because typing a measurement makes the piece made to measure.
+- The account page's **My details** (`SavedDetails.vue`, `PATCH /api/account/details`) shows everything saved, lets the customer change it, and has "Forget my size and measurements".
+- **Next: recommendations.** The saved size and measurements, plus the order history already in the database, are what a "pieces that fit you" feature would start from.
+
 ### H. A customer needs help
 
 1. "Help" in the top menu opens `HelpView.vue`, which loads `GET /api/help`: the shop's questions and answers (`FaqItem` rows) and its contact details (four fields on the `Tenant` row).
@@ -280,7 +287,7 @@ Run them from `backend/`:
 uv run pytest
 ```
 
-There are 134 tests. They use the fake clients, so they need no keys, cost nothing and run in seconds. They cover response parsing (including the `detail` wrapper and string scores), Chorus polling and timeouts, pricing rules, checkout that ignores tampered prices, the unanswered flag, the owner login wall, CSV import errors, and the image preview (the prompt, the order of reference pictures, and every refusal).
+There are 139 tests. They use the fake clients, so they need no keys, cost nothing and run in seconds. They cover response parsing (including the `detail` wrapper and string scores), Chorus polling and timeouts, pricing rules, checkout that ignores tampered prices, the unanswered flag, the owner login wall, CSV import errors, and the image preview (the prompt, the order of reference pictures, and every refusal).
 
 ## 7. Known limits and next steps
 
