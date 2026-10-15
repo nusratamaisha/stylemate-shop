@@ -7,6 +7,7 @@ import { computed, watch } from 'vue'
 import { useAccount } from '../stores/account.js'
 import { useShop } from '../stores/shop.js'
 import { formatTaka } from '../utils/format.js'
+import { deviceDetails, fillIn } from '../utils/savedDetails.js'
 
 const props = defineProps({
   customer: { type: Object, required: true }, // { name, phone, address, delivery_area }
@@ -15,14 +16,16 @@ const props = defineProps({
   idPrefix: { type: String, required: true }, // the chat and the bag page can be open at once, so ids must differ
 })
 
+// Ticked: save these details for next time (to the account, or for a guest in this browser)
+const remember = defineModel('remember', { type: Boolean, default: true })
+
 const shop = useShop()
 const account = useAccount()
 
-// A logged-in customer doesn't retype what their account already knows.
-watch(() => account.state.customer, (loggedIn) => {
-  if (!loggedIn) return
-  props.customer.name ||= loggedIn.name
-  props.customer.phone ||= loggedIn.phone
+// A returning customer doesn't retype what the shop or this device already knows (utils/savedDetails.js)
+watch(() => [account.state.loaded, account.state.customer], ([loaded, loggedIn]) => {
+  if (loggedIn) fillIn(props.customer, props.payment, loggedIn)
+  else if (loaded) fillIn(props.customer, props.payment, deviceDetails())
 }, { immediate: true })
 
 // Shown so the customer sees the total before ordering. The server works the charge out again.
@@ -88,6 +91,12 @@ const id = (name) => `${props.idPrefix}-${name}`
     <textarea :id="id('address')" v-model="customer.address" rows="3" autocomplete="street-address" required></textarea>
   </div>
 
+  <label class="remember small">
+    <input v-model="remember" type="checkbox" />
+    <span v-if="account.state.customer">Save these details to my account for next time</span>
+    <span v-else>Remember my details on this device for next time</span>
+  </label>
+
   <!-- Shown just above the confirm button on the checkout page and in the chat -->
   <p class="final-warning small" role="note">
     <strong>Please check everything before you confirm:</strong> the piece, size, colour, measurements,
@@ -140,6 +149,19 @@ const id = (name) => `${props.idPrefix}-${name}`
 }
 .pay {
   margin-top: 16px;
+}
+.remember {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-weight: 400;
+  cursor: pointer;
+}
+.remember input {
+  width: 18px;
+  height: 18px;
+  padding: 0;
 }
 .final-warning {
   margin: 4px 0 14px;

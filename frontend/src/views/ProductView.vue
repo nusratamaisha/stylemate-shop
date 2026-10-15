@@ -6,6 +6,7 @@ import PreviewPanel from '../components/PreviewPanel.vue'
 import ProductReviews from '../components/ProductReviews.vue'
 import ProductImage from '../components/ProductImage.vue'
 import SizeGuide from '../components/SizeGuide.vue'
+import { useAccount } from '../stores/account.js'
 import { useBag } from '../stores/bag.js'
 import { useChat } from '../stores/chat.js'
 import { isLight, swatch } from '../utils/colours.js'
@@ -14,6 +15,7 @@ import { formatTaka } from '../utils/format.js'
 const props = defineProps({ code: { type: String, required: true } })
 const bag = useBag()
 const chat = useChat()
+const account = useAccount()
 
 const product = ref(null)
 const loadError = ref('')
@@ -30,13 +32,22 @@ async function load() {
   try {
     product.value = await api(`/products/${encodeURIComponent(props.code)}`)
     colour.value = product.value.colours[0] || ''
-    size.value = ''
+    size.value = usualSize.value // '' unless the customer's usual size is one this piece comes in
     custom.value = { quote: null, optionIds: [], notes: '', referenceImage: '', madeToMeasure: false, measurements: null, measurementsComplete: true, measurementsText: '' }
   } catch (error) {
     loadError.value = error.message
   }
 }
 watch(() => props.code, load, { immediate: true })
+
+// A returning customer's usual size (saved from their last order) is chosen for them, if this piece comes in it
+const usualSize = computed(() => {
+  const saved = account.state.customer?.preferred_size
+  return saved && product.value?.sizes.includes(saved) ? saved : ''
+})
+watch(usualSize, (saved) => {
+  if (saved && !size.value) size.value = saved
+}, { immediate: true })
 
 // Typing any measurement makes it made to measure at once, before Flask's price arrives
 const madeToMeasure = computed(() => custom.value.madeToMeasure)
@@ -155,6 +166,7 @@ function askAbout() {
               {{ name }}
             </button>
           </div>
+          <p v-if="usualSize && size === usualSize" class="usual small">{{ usualSize }} is your usual size.</p>
         </fieldset>
 
         <p class="stock" :class="{ out: !product.in_stock }">{{ stockText }}</p>
@@ -314,5 +326,9 @@ legend {
     position: static;
     max-width: 420px;
   }
+}
+.usual {
+  margin: 6px 0 0;
+  color: var(--muted);
 }
 </style>

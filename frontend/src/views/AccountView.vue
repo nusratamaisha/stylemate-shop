@@ -2,6 +2,7 @@
 // A customer's account: log in or sign up, then see their details and past orders.
 import { computed, reactive, ref, watch } from 'vue'
 import { api } from '../api.js'
+import SavedDetails from '../components/SavedDetails.vue'
 import { useAccount } from '../stores/account.js'
 import { formatDate, formatTaka } from '../utils/format.js'
 
@@ -63,6 +64,8 @@ watch(() => account.state.customer, (customer) => {
         </div>
         <button type="button" class="button secondary small" @click="account.logOut()">Log out</button>
       </div>
+
+      <SavedDetails />
 
       <h2>Your orders</h2>
       <p v-if="ordersError" class="message error">{{ ordersError }}</p>

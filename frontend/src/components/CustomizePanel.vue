@@ -6,6 +6,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { api } from '../api.js'
+import { useAccount } from '../stores/account.js'
 import { useSizeGuide } from '../stores/sizeGuide.js'
 import { formatPriceChange, formatTaka, readyDate } from '../utils/format.js'
 
@@ -15,6 +16,13 @@ const props = defineProps({
 const emit = defineEmits(['change', 'use-size'])
 const route = useRoute()
 const sizeGuide = useSizeGuide()
+const account = useAccount()
+// Measurements saved from the customer's last made-to-measure order. Offered, not filled in:
+// typing any measurement makes the piece made to measure, so that stays the customer's choice.
+const savedMeasurements = computed(() => account.state.customer?.measurements || {})
+function useSavedMeasurements() {
+  for (const { key } of MEASUREMENTS) measurements[key] = savedMeasurements.value[key] ?? ''
+}
 
 // Only the bust is needed for every piece; the server checks the same ranges (pricing.MEASUREMENTS)
 const MEASUREMENTS = [
@@ -165,6 +173,9 @@ applyFromAddress()
 
     <fieldset class="group measure">
       <legend>Your measurements <span class="current">in inches</span></legend>
+      <p v-if="Object.keys(savedMeasurements).length" class="small saved">
+        <button type="button" class="text-button" @click="useSavedMeasurements">Use my saved measurements</button>
+      </p>
       <div class="measure-grid">
         <div v-for="item in MEASUREMENTS" :key="item.key">
           <label :for="`measure-${item.key}`">
@@ -291,6 +302,9 @@ legend {
 }
 .measure-grid label {
   font-size: var(--step--1);
+}
+.saved {
+  margin: 0 0 8px;
 }
 .hint {
   margin: 8px 0 0;

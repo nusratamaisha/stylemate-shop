@@ -7,12 +7,14 @@ import { useAccount } from '../stores/account.js'
 import { useBag } from '../stores/bag.js'
 import { refreshProducts } from '../stores/shop.js'
 import { formatDate, formatTaka } from '../utils/format.js'
+import { afterOrder } from '../utils/savedDetails.js'
 
 const bag = useBag()
 const account = useAccount()
 const customer = reactive({ name: '', phone: '', address: '', delivery_area: '' })
 // Delivery, payment and contact fields, the total and the account prefill live in CheckoutFields
 const payment = reactive({ method: '', transaction_id: '' })
+const remember = ref(true)
 
 const placing = ref(false)
 const error = ref('')
@@ -27,12 +29,14 @@ async function placeOrder() {
       body: {
         customer,
         payment, // a transaction ID left over from a wallet choice is ignored for cash
+        remember: remember.value,
         // Prices are not sent: the server works them out again.
         items: bag.items.value.map(({ product_code, size, colour, quantity, option_ids, notes, measurements, reference_image }) =>
           ({ product_code, size, colour, quantity, option_ids, notes, measurements, reference_image })),
       },
     })
     bag.clear()
+    afterOrder(account, customer, payment, remember.value)
     refreshProducts() // the order lowered the stock, so the shop pages should show the new numbers
   } catch (err) {
     error.value = err.message
@@ -100,7 +104,7 @@ async function placeOrder() {
           <RouterLink to="/account">Log in</RouterLink> first to save this order to your account. You can also order as a guest.
         </p>
         <p v-else-if="account.state.customer" class="small muted">This order will be saved to your account.</p>
-        <CheckoutFields :customer="customer" :payment="payment" :subtotal="bag.total.value" id-prefix="checkout" />
+        <CheckoutFields v-model:remember="remember" :customer="customer" :payment="payment" :subtotal="bag.total.value" id-prefix="checkout" />
 
         <p v-if="error" class="message error">{{ error }}</p>
         <button type="submit" class="button full" :disabled="placing">{{ placing ? 'Placing your order…' : 'Place order' }}</button>

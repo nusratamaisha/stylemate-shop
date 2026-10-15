@@ -6,9 +6,11 @@
 import { computed, reactive, ref, useId, watchEffect } from 'vue'
 import { api } from '../api.js'
 import CheckoutFields from './CheckoutFields.vue'
+import { useAccount } from '../stores/account.js'
 import { refreshProducts } from '../stores/shop.js'
 import { chosenOptionIds } from '../utils/chatOrder.js'
 import { formatTaka, readyDate } from '../utils/format.js'
+import { afterOrder } from '../utils/savedDetails.js'
 
 const props = defineProps({
   draft: { type: Object, required: true }, // { order, size, colour, quantity, changes }
@@ -52,6 +54,8 @@ const idPrefix = `chat-order-${useId()}` // one chat can hold several orders, so
 const step = ref('summary') // 'summary' -> 'details' -> 'done'
 const customer = reactive({ name: '', phone: '', address: '', delivery_area: '' })
 const payment = reactive({ method: '', transaction_id: '' })
+const remember = ref(true)
+const account = useAccount()
 const placing = ref(false)
 const error = ref('')
 const confirmation = ref(null)
@@ -67,10 +71,12 @@ async function confirmOrder() {
         source: 'chat', // the owner sees a "Chat" badge on it in the Orders tab
         customer,
         payment,
+        remember: remember.value,
         items: [{ product_code, size, colour, quantity, option_ids }], // no price: the server works it out
       },
     })
     step.value = 'done'
+    afterOrder(account, customer, payment, remember.value)
     refreshProducts() // the order lowered the stock
   } catch (err) {
     error.value = err.message
@@ -101,7 +107,7 @@ async function confirmOrder() {
 
     <form v-else-if="step === 'details'" class="details" @submit.prevent="confirmOrder">
       <p class="order-note">A few details to send your order:</p>
-      <CheckoutFields :customer="customer" :payment="payment" :subtotal="unitPrice * draft.quantity" :id-prefix="idPrefix" />
+      <CheckoutFields v-model:remember="remember" :customer="customer" :payment="payment" :subtotal="unitPrice * draft.quantity" :id-prefix="idPrefix" />
       <p v-if="error" class="message error" role="alert">{{ error }}</p>
       <div class="actions">
         <button type="submit" class="button small" :disabled="placing">
