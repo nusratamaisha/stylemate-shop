@@ -2,5 +2,7 @@
 
 from .chorus import ChorusClient
 from .maira import GeneratedImage, MairaAnswer, MairaClient, Reference, ReferenceImage
+from .recommender import RecommenderClient
 
-__all__ = ["ChorusClient", "GeneratedImage", "MairaAnswer", "MairaClient", "Reference", "ReferenceImage"]
+__all__ = ["ChorusClient", "GeneratedImage", "MairaAnswer", "MairaClient", "RecommenderClient", "Reference",
+           "ReferenceImage"]

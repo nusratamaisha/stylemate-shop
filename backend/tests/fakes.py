@@ -1,4 +1,4 @@
-"""Stand-ins for the Maira and Chorus clients, so tests never call the real APIs.
+"""Stand-ins for the Maira, Chorus and recommender clients, so tests never call the real APIs.
 
 They have the same methods as the real clients, so the app can't tell the difference.
 """
@@ -55,6 +55,54 @@ class FakeMaira:
     def train_dataset(self, dataset_id):
         self.trained.append(dataset_id)
         return {}
+
+
+class FakeRecommender:
+    """Gigalogy's recommender, without the network. `similar` / `cart` are the IDs it answers with."""
+
+    def __init__(self):
+        self.similar: list[str] = []
+        self.cart: list[str] = []
+        self.fail = False
+        self.calls: list[tuple] = []
+        self.indices = {}
+        self.uploads: list[tuple] = []
+
+    def _check(self):
+        if self.fail:
+            raise ServiceUnavailableError("Recommender is down")
+
+    def get_indices(self):
+        self._check()
+        return {"detail": self.indices}
+
+    def create_indices(self):
+        self.calls.append(("create_indices",))
+        self.indices = {"items": "created"}
+        return {"detail": "ok"}
+
+    def save_mapper(self, key_map):
+        self.calls.append(("save_mapper", key_map))
+        return {"detail": "ok"}
+
+    def upload_items(self, filename, content):
+        self._check()
+        self.uploads.append((filename, content))
+        return {"detail": "ok"}
+
+    def train_items(self):
+        self.calls.append(("train_items",))
+        return {"detail": "ok"}
+
+    def similar_items(self, *, user_id, item_id, member_id=None):
+        self._check()
+        self.calls.append(("similar_items", user_id, item_id, member_id))
+        return list(self.similar)
+
+    def cart_items(self, *, user_id, item_ids, member_id=None, size=10):
+        self._check()
+        self.calls.append(("cart_items", user_id, tuple(item_ids), member_id))
+        return list(self.cart)
 
 
 class FakeChorus:

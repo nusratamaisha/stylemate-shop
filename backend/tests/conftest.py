@@ -8,7 +8,7 @@ from stylemate.extensions import db
 from stylemate.models import CustomizationOption, Tenant, User
 from stylemate.services.catalog import parse_products_csv, save_products
 
-from .fakes import FakeChorus, FakeMaira
+from .fakes import FakeChorus, FakeMaira, FakeRecommender
 
 PRODUCTS_CSV = Path(__file__).parent / "data" / "products.csv"  # a fixed catalogue, separate from the shop's
 OWNER_EMAIL = "owner@example.com"
@@ -26,7 +26,12 @@ def chorus():
 
 
 @pytest.fixture
-def app(maira, chorus, tmp_path):
+def recommender():
+    return FakeRecommender()
+
+
+@pytest.fixture
+def app(maira, chorus, recommender, tmp_path):
     app = create_app(
         {
             "TESTING": True,
@@ -39,6 +44,7 @@ def app(maira, chorus, tmp_path):
         },
         maira=maira,
         chorus=chorus,
+        recommender=recommender,
     )
     with app.app_context():
         _seed()

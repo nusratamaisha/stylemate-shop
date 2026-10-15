@@ -20,6 +20,8 @@ class Services:
     catalog_importer: object
     preview: object
     help_publisher: object
+    recommender: object  # the Gigalogy recommender client, for `flask sync-recommender`
+    recommendations: object
 
 
 def services() -> Services:

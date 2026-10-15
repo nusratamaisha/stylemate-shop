@@ -159,6 +159,22 @@ def create_order():
     return jsonify({**order.to_dict(), "customer_order_number": accounts.order_number(order)}), 201
 
 
+@bp.get("/products/<code>/recommendations")
+def product_recommendations(code: str):
+    """ "You may also like": pieces similar to this one that this customer can buy."""
+    return jsonify(services().recommendations.similar(
+        current_tenant(), code, _visitor_id(request.args.get("visitor_id")), current_customer()))
+
+
+@bp.post("/recommendations/bag")
+def bag_recommendations():
+    """ "Complete the look": pieces that go with everything in the bag."""
+    body = json_body()
+    codes = [str(code) for code in body.get("codes") or []][:20]
+    return jsonify(services().recommendations.for_bag(
+        current_tenant(), codes, _visitor_id(body.get("visitor_id")), current_customer()))
+
+
 @bp.get("/images/<path:filename>")
 def product_image(filename: str):
     return send_from_directory(current_app.config["IMAGES_DIR"], filename, max_age=60)
