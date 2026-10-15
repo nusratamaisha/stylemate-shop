@@ -7,6 +7,7 @@ import ChatOrderCard from './ChatOrderCard.vue'
 import ProductImage from './ProductImage.vue'
 import { useBag } from '../stores/bag.js'
 import { useChat } from '../stores/chat.js'
+import { useShop } from '../stores/shop.js'
 import { renderMarkdown } from '../utils/markdown.js'
 import { formatTaka } from '../utils/format.js'
 import { canRecord, startRecording } from '../utils/wavRecorder.js'
@@ -45,7 +46,9 @@ function goToCheckout(message, item) {
 const draft = ref('')
 const log = ref(null)
 const input = ref(null)
-const micAvailable = canRecord()
+const shop = useShop()
+// The browser can record, and the shop's plan includes voice questions (services/plans.py)
+const micAvailable = computed(() => canRecord() && shop.info?.features?.voice !== false)
 
 const recording = ref(null) // the active recorder, or null
 const seconds = ref(0)

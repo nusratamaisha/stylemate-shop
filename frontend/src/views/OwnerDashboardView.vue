@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '../api.js'
 import { formatDate, formatTaka } from '../utils/format.js'
@@ -46,8 +46,14 @@ const loaders = {
   messages: async () => (messages.value = await api('/owner/messages')),
 }
 
+// The shop's plan use this month (services/plans.py); only meters at 80% or more are shown
+const usage = ref(null)
+const KIND_LABELS = { chat: 'AI chat questions', preview: 'picture previews' }
+const warnings = computed(() => (usage.value?.meters || []).filter((meter) => meter.warn))
+
 onMounted(() => load(async () => {
   owner.value = await api('/owner/me')
+  api('/owner/usage').then((data) => (usage.value = data)).catch(() => {}) // a warning is a bonus, never an error
   await loaders[tab.value]()
 }))
 watch(tab, (name) => load(loaders[name]))
@@ -115,6 +121,16 @@ async function logOut() {
         <p class="muted small">Logged in as {{ owner?.email }}</p>
       </div>
       <button type="button" class="button secondary small" @click="logOut">Log out</button>
+    </div>
+
+    <div v-for="meter in warnings" :key="meter.kind" class="plan-warning" :class="{ over: meter.over }" role="status">
+      <strong>{{ usage.plan }} plan:</strong>
+      {{ meter.used.toLocaleString('en-IN') }} of {{ meter.limit.toLocaleString('en-IN') }} {{ KIND_LABELS[meter.kind] }} used this month.
+      <template v-if="meter.over">
+        You’ve reached the limit. Your shop keeps going for 10% more, then customers are asked to message you instead.
+        Contact StyleMate to move to a bigger plan.
+      </template>
+      <template v-else>You’re close to the limit; it starts again on the 1st.</template>
     </div>
 
     <div class="tabs" role="tablist">
@@ -586,5 +602,16 @@ td select {
   .columns {
     grid-template-columns: 1fr;
   }
+}
+.plan-warning {
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  background: #fbf2dc;
+  color: #6b4a05;
+}
+.plan-warning.over {
+  background: #f9e3e4;
+  color: var(--danger);
 }
 </style>

@@ -14,6 +14,8 @@ const bag = useBag()
 const account = useAccount()
 const route = useRoute()
 const isOwnerPage = computed(() => route.path.startsWith('/owner'))
+// StyleMate's own page (selling to shop owners) has its own header and footer, and no shop chat
+const isPlatformPage = computed(() => route.path.startsWith('/stylemate'))
 // Shown as typed, but with a capital first letter ("maisha" reads better as "Maisha")
 const firstName = computed(() => {
   const name = (account.state.customer?.name || '').trim().split(/\s+/)[0]
@@ -22,6 +24,8 @@ const firstName = computed(() => {
 </script>
 
 <template>
+  <RouterView v-if="isPlatformPage" />
+  <template v-else>
   <a class="skip" href="#main">Skip to content</a>
   <header class="site-header">
     <div class="page bar">
@@ -74,10 +78,16 @@ const firstName = computed(() => {
         <a href="https://www.facebook.com/daamkoto001" target="_blank" rel="noopener">Daam Koto</a>,
         used with their permission.
       </p>
+      <!-- How other Facebook shops find StyleMate: every storefront is also its advert -->
+      <p v-if="!isOwnerPage" class="powered small muted">
+        This shop’s website and AI stylist run on <RouterLink to="/stylemate">StyleMate</RouterLink>.
+        Sell on Facebook? <RouterLink to="/stylemate">Get one for your shop</RouterLink>.
+      </p>
     </div>
   </footer>
 
   <ChatWidget v-if="!isOwnerPage" />
+  </template>
 </template>
 
 <style scoped>
@@ -223,6 +233,15 @@ main {
   margin: 0;
   padding-top: 16px;
   border-top: 1px solid rgba(255, 255, 255, 0.15); /* the footer is dark, so a faint light line */
+}
+.powered {
+  flex-basis: 100%;
+  max-width: none;
+  margin: 0;
+}
+.powered a {
+  color: inherit;
+  text-decoration: underline;
 }
 .foot.with-chat {
   padding-bottom: 96px; /* room for the chat button */

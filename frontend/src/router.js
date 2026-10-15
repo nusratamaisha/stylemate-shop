@@ -8,6 +8,7 @@ import HelpView from './views/HelpView.vue'
 import AccountView from './views/AccountView.vue'
 import OwnerLoginView from './views/OwnerLoginView.vue'
 import OwnerDashboardView from './views/OwnerDashboardView.vue'
+import StyleMateView from './views/StyleMateView.vue'
 
 export default createRouter({
   history: createWebHistory(),
@@ -21,6 +22,8 @@ export default createRouter({
     { path: '/account', component: AccountView },
     { path: '/owner/login', component: OwnerLoginView },
     { path: '/owner', component: OwnerDashboardView },
+    // StyleMate's own page for selling to shop owners: no shop header, footer or chat (App.vue)
+    { path: '/stylemate', component: StyleMateView },
   ],
   scrollBehavior: () => ({ top: 0 }),
 })
