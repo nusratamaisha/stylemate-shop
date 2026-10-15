@@ -12,7 +12,7 @@ import { canRecord, startRecording } from '../utils/wavRecorder.js'
 
 const MAX_RECORDING_SECONDS = 15
 const SUGGESTIONS = [
-  "I'm going to a wedding. What do you have under ৳4,500?",
+  'I need something for Eid. What do you have under ৳3,000?',
   'Can I get a dress with long sleeves?',
 ]
 
@@ -30,7 +30,7 @@ function goToCustomize(message) {
   router.push({ path: `/products/${product.code}`, query: { ...(sleeves ? { sleeves } : {}), ...measurements } })
 }
 const describeCustomize = ({ sleeves, measurements }) =>
-  [sleeves, ...Object.entries(measurements).map(([name, inches]) => `${name} ${inches} in`)].filter(Boolean).join(' · ')
+  [sleeves, ...Object.entries(measurements).map(([name, inches]) => `${name.replace('_', ' ')} ${inches} in`)].filter(Boolean).join(' · ')
 
 function goToCheckout(message) {
   const order = message.order

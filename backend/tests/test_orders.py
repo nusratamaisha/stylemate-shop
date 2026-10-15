@@ -83,7 +83,7 @@ def test_checkout_page_gets_the_shops_shipping_charges(client):
 def measured(**changes):
     return {"product_code": "SR-002", "colour": "Maroon",
             "option_ids": [option_id("Fit", "Made to your measurements"), option_id("Sleeves", "Sleeveless")],
-            "measurements": {"bust": 38, "waist": "32", "hip": 40, "length": 36}, **changes}
+            "measurements": {"bust": 38, "waist": "32", "sleeve_length": 20, "length": 36}, **changes}
 
 
 def test_made_to_measure_needs_no_size(client):
@@ -91,17 +91,26 @@ def test_made_to_measure_needs_no_size(client):
     assert response.status_code == 201
     item = response.get_json()["items"][0]
     assert item["size"] == "Made to measure"
-    assert item["unit_price_bdt"] == 4200 + 600 - 150
+    assert item["unit_price_bdt"] == 4200 + 300 - 150
     assert item["custom_details"] == ("Sleeves: Sleeveless; Fit: Made to your measurements; "
-                                      "Measurements: bust 38 in, waist 32 in, hip 40 in, length 36 in")
+                                      "Measurements: bust 38 in, waist 32 in, sleeve length 20 in, length 36 in")
 
 
 def test_made_to_measure_needs_the_measurements(client):
-    missing = client.post("/api/orders", json={"customer": CUSTOMER, "items": [measured(measurements={"bust": 38})]})
-    assert missing.status_code == 400 and "waist measurement" in missing.get_json()["error"]
+    missing = client.post("/api/orders", json={"customer": CUSTOMER, "items": [measured(measurements={"waist": 30})]})
+    assert missing.status_code == 400 and "bust measurement" in missing.get_json()["error"]
     silly = client.post("/api/orders", json={"customer": CUSTOMER, "items": [
-        measured(measurements={"bust": 380, "waist": 32, "hip": 40})]})
+        measured(measurements={"bust": 380, "waist": 32})]})
     assert silly.status_code == 400 and "between 20 and 72" in silly.get_json()["error"]
+    long_sleeve = client.post("/api/orders", json={"customer": CUSTOMER, "items": [
+        measured(measurements={"bust": 38, "sleeve_length": 40})]})
+    assert long_sleeve.status_code == 400 and "sleeve length measurement should be between 4 and 30" in long_sleeve.get_json()["error"]
+
+
+def test_made_to_measure_needs_only_the_bust(client):
+    response = client.post("/api/orders", json={"customer": CUSTOMER, "items": [measured(measurements={"bust": 38})]})
+    assert response.status_code == 201
+    assert response.get_json()["items"][0]["custom_details"].endswith("Measurements: bust 38 in")
 
 
 def test_made_to_measure_replaces_the_length_options(client):

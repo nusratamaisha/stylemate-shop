@@ -108,7 +108,10 @@ def fit_description(tenant: Tenant, product: Product, size: str, measurements, m
     cut_for = (f", cut for a bust of {cut['bust_inches']} inches, a waist of {cut['waist_inches']} inches "
                f"and a hip of {cut['hip_inches']} inches") if cut else ""
     return (f"The piece is size {size}{cut_for}. Show this exact size on this person's real body. "
-            "If the size is too small for them it must look tight; if it is too large it must hang loose. "
+            "Judge their body from their photo and compare it with these measurements. "
+            "If the size is too small for them it must look tight: fabric pulled across the bust and hips, "
+            "buttons gaping, seams straining, the hem and sleeves riding up. "
+            "If it is too large it must hang loose: extra fabric, dropped shoulders, sleeves past the wrist. "
             "Never reshape the person to suit the piece, and never resize the piece to flatter them.")
 
 

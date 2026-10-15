@@ -16,8 +16,15 @@ from .sizes import sleeve_lengths, sleeve_word
 DELIVERY_AREAS = {"inside_dhaka": "Inside Dhaka", "outside_dhaka": "Outside Dhaka"}
 
 # Body measurements for a made-to-measure piece, in inches. Length is optional: left out, it stays as shown.
-REQUIRED_MEASUREMENTS = ["bust", "waist", "hip"]
-MEASUREMENT_RANGE = (20, 72)
+# The body measurements a made-to-measure piece takes: name -> (words for the tailor, lowest, highest, required).
+# Only the bust is needed for every piece; waist, sleeve length and length depend on the piece.
+MEASUREMENTS = {
+    "bust": ("bust", 20, 72, True),
+    "waist": ("waist", 20, 72, False),
+    "sleeve_length": ("sleeve length", 4, 30, False),
+    "length": ("length", 20, 72, False),
+}
+REQUIRED_MEASUREMENTS = [name for name, (_, _, _, required) in MEASUREMENTS.items() if required]
 MADE_TO_MEASURE_SIZE = "Made to measure"  # stored where a ready-made piece has S, M or L
 
 SLEEVE_GROUP = "Sleeves"  # the option group that is compared with a product's `sleeve` value
@@ -180,24 +187,23 @@ def clean_measurements(measurements, *, require_all: bool = True) -> dict[str, i
     passes on what the customer has said so far).
     """
     measurements = measurements if isinstance(measurements, dict) else {}
-    low, high = MEASUREMENT_RANGE
     clean = {}
-    for name in [*REQUIRED_MEASUREMENTS, "length"]:
+    for name, (words, low, high, required) in MEASUREMENTS.items():
         value = measurements.get(name)
         if value in (None, ""):
-            if require_all and name in REQUIRED_MEASUREMENTS:
-                raise UserInputError(f"Please give your {name} measurement in inches.")
+            if require_all and required:
+                raise UserInputError(f"Please give your {words} measurement in inches.")
             continue
         try:
             inches = round(float(value))
         except (TypeError, ValueError):
-            raise UserInputError(f"Your {name} measurement must be a number of inches.") from None
+            raise UserInputError(f"Your {words} measurement must be a number of inches.") from None
         if not low <= inches <= high:
-            raise UserInputError(f"Your {name} measurement should be between {low} and {high} inches.")
+            raise UserInputError(f"Your {words} measurement should be between {low} and {high} inches.")
         clean[name] = inches
     return clean
 
 
 def measurements_text(measurements: dict[str, int]) -> str:
-    """For the tailor: "bust 38 in, waist 32 in, hip 40 in, length 36 in"."""
-    return ", ".join(f"{name} {inches} in" for name, inches in measurements.items())
+    """For the tailor: "bust 38 in, waist 32 in, sleeve length 18 in, length 36 in"."""
+    return ", ".join(f"{MEASUREMENTS[name][0]} {inches} in" for name, inches in measurements.items())

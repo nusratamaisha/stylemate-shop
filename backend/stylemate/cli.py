@@ -75,7 +75,7 @@ DEFAULT_OPTIONS = [
     ("Length", "Shorter by 2 inches", -100, 1, -2, False),
     ("Length", "Longer by 2 inches", 250, 2, 2, False),
     ("Lining", "Add full cotton lining", 300, 2, 0, False),
-    ("Fit", "Made to your measurements", 600, 3, 0, True),
+    ("Fit", "Made to your measurements", 300, 3, 0, True),
 ]
 
 # (size, bust, waist, hip): the body each size is cut for, in inches

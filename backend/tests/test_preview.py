@@ -84,11 +84,11 @@ def test_try_on_needs_a_size_the_piece_comes_in(client, maira):
 
 def test_try_on_of_a_made_to_measure_piece_uses_the_customers_measurements(client, maira):
     response = post_preview(client, option_ids=[str(option_id("Fit", "Made to your measurements"))],
-                            bust="38", waist="32", hip="40", photo=(io.BytesIO(PNG), "me.png", "image/png"))
+                            bust="38", waist="32", sleeve_length="20", photo=(io.BytesIO(PNG), "me.png", "image/png"))
 
     assert response.status_code == 200  # no S, M or L needed
     prompt = maira.image_requests[0]["prompt"]
-    assert "made to this person's own measurements (bust 38 in, waist 32 in, hip 40 in)" in prompt
+    assert "made to this person's own measurements (bust 38 in, waist 32 in, sleeve length 20 in)" in prompt
     assert "fits their body exactly" in prompt
 
 

@@ -56,7 +56,7 @@ def test_price_quote_endpoint(client):
     })
     assert response.status_code == 200
     data = response.get_json()
-    assert data["total_bdt"] == 4200 - 100 + 600  # short sleeves use less fabric, so they cost less
+    assert data["total_bdt"] == 4200 - 100 + 300  # short sleeves use less fabric, so they cost less
     assert data["ready_in_days"] == 7 + 2 + 3
 
 

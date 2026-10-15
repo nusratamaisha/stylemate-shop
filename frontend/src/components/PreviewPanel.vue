@@ -12,7 +12,7 @@ const props = defineProps({
   optionIds: { type: Array, default: () => [] },
   size: { type: String, default: '' },
   madeToMeasure: { type: Boolean, default: false },
-  measurements: { type: Object, default: null }, // { bust, waist, hip, length } for a made-to-measure piece
+  measurements: { type: Object, default: null }, // { bust, waist, sleeve_length, length } for a made-to-measure piece
 })
 
 const MAX_PHOTO_BYTES = 4 * 1024 * 1024

@@ -119,14 +119,14 @@ def test_ordinary_answers_have_no_order(client):
 
 def test_a_described_custom_piece_opens_the_product_page_prefilled(client, maira):
     maira.answer = ("I've set that up for you. Check the price on the product page.\n"
-                    "[CUSTOMIZE product_id=SR-002; sleeves=sleeveless; bust=38; length=36; waist=; hip=]")
+                    "[CUSTOMIZE product_id=SR-002; sleeves=sleeveless; bust=38; length=36; waist=; sleeve_length=21]")
     data = client.post("/api/chat", json={"message": "shefali, sleeveless, length 36, bust 38"}).get_json()
 
     assert "[CUSTOMIZE" not in data["answer"]
     custom = data["customize"]
     assert custom["product"]["code"] == "SR-002"
     assert custom["sleeves"] == "Sleeveless"  # an option this piece offers, in the shop's wording
-    assert custom["measurements"] == {"bust": 38, "length": 36}  # only what the customer gave
+    assert custom["measurements"] == {"bust": 38, "sleeve_length": 21, "length": 36}  # only what the customer gave
     assert "price" not in custom and "total_bdt" not in custom  # the chat never prices a custom piece
 
 

@@ -14,16 +14,17 @@ const emit = defineEmits(['change', 'use-size'])
 const route = useRoute()
 const sizeGuide = useSizeGuide()
 
+// Only the bust is needed for every piece; the server checks the same ranges (pricing.MEASUREMENTS)
 const MEASUREMENTS = [
-  { key: 'bust', label: 'Bust', required: true },
-  { key: 'waist', label: 'Waist', required: true },
-  { key: 'hip', label: 'Hip', required: true },
-  { key: 'length', label: 'Length', required: false },
+  { key: 'bust', label: 'Bust', required: true, min: 20, max: 72 },
+  { key: 'waist', label: 'Waist', required: false, min: 20, max: 72 },
+  { key: 'sleeve_length', label: 'Sleeve length', required: false, min: 4, max: 30 },
+  { key: 'length', label: 'Length', required: false, min: 20, max: 72 },
 ]
 
 // One choice per group; null means "as shown".
 const choices = reactive(Object.fromEntries(props.product.customization.map((group) => [group.group, null])))
-const measurements = reactive({ bust: '', waist: '', hip: '', length: '' })
+const measurements = reactive({ bust: '', waist: '', sleeve_length: '', length: '' })
 const notes = ref('')
 // A picture for the tailor: uploaded when chosen, because the bag can't hold a file
 const picture = ref(null) // { name (from the server), filename, previewUrl }
@@ -49,22 +50,25 @@ const optionIds = computed(() => Object.entries(choices)
 
 const cleanMeasurements = computed(() => Object.fromEntries(
   Object.entries(measurements).filter(([, value]) => value !== '' && value !== null).map(([key, value]) => [key, Number(value)])))
-const measurementsComplete = computed(() => MEASUREMENTS.every(({ key, required }) => {
+const measurementsComplete = computed(() => MEASUREMENTS.every(({ key, required, min, max }) => {
   const value = cleanMeasurements.value[key]
-  return value === undefined ? !required : value >= 20 && value <= 72
+  return value === undefined ? !required : value >= min && value <= max
 }))
-const measurementsText = computed(() => Object.entries(cleanMeasurements.value).map(([key, value]) => `${key} ${value} in`).join(', '))
+const measurementsText = computed(() => MEASUREMENTS.filter(({ key }) => cleanMeasurements.value[key] !== undefined)
+  .map(({ key, label }) => `${label.toLowerCase()} ${cleanMeasurements.value[key]} in`).join(', '))
 
 // Smart check: if a standard size already fits these measurements, say so. It saves the customer the made-to-measure charge.
 const standardSize = computed(() => {
-  const { bust, waist, hip } = cleanMeasurements.value
-  if (!madeToMeasure.value || !bust || !waist || !hip) return null
+  const { bust, waist, sleeve_length: sleeve, length } = cleanMeasurements.value
+  if (!madeToMeasure.value || !bust) return null
+  // The waist is optional, so it is compared only when given
   const fits = sizeGuide.sizes.filter((row) => props.product.sizes.includes(row.size))
-    .find((row) => row.bust_inches >= bust && row.waist_inches >= waist && row.hip_inches >= hip)
+    .find((row) => row.bust_inches >= bust && (!waist || row.waist_inches >= waist))
   if (!fits) return { size: null }
-  // "Fits" means every measurement is within 2 inches of the size, not just smaller than it
-  const close = fits.bust_inches - bust <= 2 && fits.waist_inches - waist <= 2 && fits.hip_inches - hip <= 2
-  const sameLength = !cleanMeasurements.value.length || cleanMeasurements.value.length === props.product.length_inches
+  // "Fits" means every measurement given is within 2 inches of the size, not just smaller than it
+  const close = fits.bust_inches - bust <= 2 && (!waist || fits.waist_inches - waist <= 2)
+  // A changed length or sleeve length can only be sewn to order
+  const sameLength = (!length || length === props.product.length_inches) && !sleeve
   return { size: fits.size, close, sameLength }
 })
 
@@ -197,13 +201,14 @@ applyFromAddress()
             {{ item.label }} <span v-if="!item.required" class="muted">(optional)</span>
           </label>
           <input :id="`measure-${item.key}`" v-model="measurements[item.key]" type="number" inputmode="numeric"
-            min="20" max="72" step="1" :required="item.required"
+            :min="item.min" :max="item.max" step="1" :required="item.required"
             :placeholder="item.key === 'length' && product.length_inches ? String(product.length_inches) : ''" />
         </div>
       </div>
       <p class="muted small hint">
-        Measure your body, not a garment. Leave length empty to keep it as shown<span v-if="product.length_inches"> ({{ product.length_inches }} in)</span>.
-        No need to choose S, M or L.
+        Measure your body, not a garment. Only the bust is needed; add the others if this piece needs them.
+        Leave length empty to keep it as shown<span v-if="product.length_inches"> ({{ product.length_inches }} in)</span>.
+        Sleeve length is from the shoulder seam to where the sleeve should end. No need to choose S, M or L.
       </p>
 
       <p v-if="standardSize?.size && standardSize.close && standardSize.sameLength" class="tip small" role="status">

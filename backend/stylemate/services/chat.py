@@ -22,7 +22,7 @@ MAX_ORDER_QUANTITY = 10
 # [ORDER product_id=SR-002; size=S; colour=Dusty Pink; quantity=1]
 ORDER_MARKER = re.compile(r"\[ORDER\b([^\]]*)\]", re.IGNORECASE)
 # The line it writes when a customer describes a piece made for them, e.g.
-# [CUSTOMIZE product_id=SR-002; sleeves=Sleeveless; bust=38; length=36]
+# [CUSTOMIZE product_id=SR-002; sleeves=Sleeveless; bust=38; sleeve_length=; length=36]
 CUSTOMIZE_MARKER = re.compile(r"\[CUSTOMIZE\b([^\]]*)\]", re.IGNORECASE)
 
 
@@ -51,7 +51,7 @@ class ChatCustomize:
 
     product: Product
     sleeves: str  # the label of a sleeve option this piece offers, or ""
-    measurements: dict[str, int]  # whichever of bust, waist, hip and length the customer has given
+    measurements: dict[str, int]  # whichever of bust, waist, sleeve length and length the customer has given
 
     def to_dict(self) -> dict:
         return {"product": self.product.to_dict(), "sleeves": self.sleeves, "measurements": self.measurements}
@@ -161,7 +161,7 @@ def read_customize(tenant: Tenant, products: list[Product], answer: str) -> tupl
     sleeves = next((label for label in offered if wanted and sleeve_word(label) == wanted), "")
 
     measurements = {}
-    for name in [*pricing.REQUIRED_MEASUREMENTS, "length"]:
+    for name in pricing.MEASUREMENTS:
         try:  # one unreadable number shouldn't lose the others
             measurements.update(pricing.clean_measurements({name: fields.get(name) or fields.get(f"{name}_inches")},
                                                            require_all=False))
