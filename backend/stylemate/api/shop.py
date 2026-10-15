@@ -154,7 +154,7 @@ def create_order():
     body = json_body()
     order = orders.place_order(current_tenant(), body.get("customer"), body.get("items") or [],
                                account=current_customer(), uploads_dir=current_app.config["UPLOADS_DIR"],
-                               payment=body.get("payment"))
+                               payment=body.get("payment"), source=str(body.get("source") or "website"))
     return jsonify({**order.to_dict(), "customer_order_number": accounts.order_number(order)}), 201
 
 

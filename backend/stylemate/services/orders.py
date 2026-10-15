@@ -18,8 +18,14 @@ MAX_QUANTITY = 10
 
 
 def place_order(tenant: Tenant, customer: dict, items: list[dict], account: Customer | None = None,
-                uploads_dir: str = "", payment: dict | None = None) -> Order:
-    """Check and save an order. `account` is the logged-in customer, or None for a guest checkout."""
+                uploads_dir: str = "", payment: dict | None = None, source: str = "website") -> Order:
+    """Check and save an order. `account` is the logged-in customer, or None for a guest checkout.
+
+    `source` says where the customer confirmed it: "website" (the checkout page) or "chat".
+    Both go through exactly the same checks, so a chat order is priced and stocked like any other.
+    """
+    if source not in Order.SOURCES:
+        raise UserInputError("Unknown order source.")
     customer = customer or {}
     name, phone, address = (str(customer.get(key) or "").strip() for key in ("name", "phone", "address"))
     if not (name and phone and address):
@@ -33,7 +39,8 @@ def place_order(tenant: Tenant, customer: dict, items: list[dict], account: Cust
     order = Order(tenant_id=tenant.id, customer_id=account.id if account else None,
                   customer_name=name, phone=phone, address=address,
                   delivery_area=area, shipping_bdt=shipping, total_bdt=0,
-                  payment_method=method, payment_reference=reference, payment_status=payment_status)
+                  payment_method=method, payment_reference=reference, payment_status=payment_status,
+                  source=source)
     for item in items:
         order.items.append(_build_item(tenant, item, uploads_dir))
     _take_from_stock(order.items)
@@ -148,6 +155,7 @@ def sales_summary(tenant: Tenant) -> dict:
         "average_order_bdt": round(goods / len(orders)) if orders else 0,
         "to_ship": sum(1 for line in lines if line.status != "shipped"),
         "payments_to_check": sum(1 for order in orders if order.payment_status == "to_check"),
+        "chat_orders": sum(1 for order in orders if order.source == "chat"),  # what the assistant sold
         "best_sellers": [{"name": name, "quantity": quantity} for name, quantity in best],
     }
 

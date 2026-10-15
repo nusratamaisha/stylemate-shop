@@ -271,6 +271,8 @@ class Order(db.Model):
 
     PAYMENT_METHODS = {"cash_on_delivery": "Cash on delivery", "bkash": "bKash", "nagad": "Nagad", "rocket": "Rocket"}
     PAYMENT_STATUSES = ("unpaid", "to_check", "paid")
+    # Where the customer confirmed the order: the checkout page, or the stylist chat
+    SOURCES = {"website": "Website", "chat": "Chat"}
 
     id: Mapped[int] = mapped_column(primary_key=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenant.id"))
@@ -284,6 +286,7 @@ class Order(db.Model):
     payment_method: Mapped[str] = mapped_column(String(20), default="cash_on_delivery")
     payment_reference: Mapped[str] = mapped_column(String(40), default="")  # the wallet's transaction ID (TrxID)
     payment_status: Mapped[str] = mapped_column(String(20), default="unpaid")
+    source: Mapped[str] = mapped_column(String(20), default="website")
     created_at: Mapped[datetime] = mapped_column(default=utc_now)
 
     items: Mapped[list["OrderItem"]] = relationship(back_populates="order")
@@ -300,6 +303,7 @@ class Order(db.Model):
             "payment_label": self.PAYMENT_METHODS.get(self.payment_method, self.payment_method),
             "payment_reference": self.payment_reference,
             "payment_status": self.payment_status,
+            "source": self.source,
             "items": [item.to_dict() for item in self.items],
         }
 

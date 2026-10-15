@@ -182,3 +182,20 @@ def test_an_order_for_more_than_is_left_is_refused_and_changes_nothing(client):
     assert stock_of(client, "SR-002") == 0
     sold_out = order(client, maxi)
     assert sold_out.status_code == 400 and "out of stock" in sold_out.get_json()["error"]
+
+
+def test_a_chat_order_gets_the_same_checks_and_prices_as_checkout(client):
+    chat_order = {"customer": CUSTOMER, "source": "chat", "items": [
+        {"product_code": "SR-003", "size": "M", "colour": "Mustard", "unit_price_bdt": 1}]}  # a tampered price
+    response = client.post("/api/orders", json=chat_order)
+    assert response.status_code == 201
+    assert (response.get_json()["source"], response.get_json()["total_bdt"]) == ("chat", 1850 + 80)
+
+    no_address = client.post("/api/orders", json={**chat_order, "customer": {**CUSTOMER, "address": ""}})
+    assert no_address.status_code == 400
+
+
+def test_an_unknown_order_source_is_refused(client):
+    response = client.post("/api/orders", json={"customer": CUSTOMER, "source": "facebook", "items": [
+        {"product_code": "SR-003", "size": "M", "colour": "Mustard"}]})
+    assert response.status_code == 400

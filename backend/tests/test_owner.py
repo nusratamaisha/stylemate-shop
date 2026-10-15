@@ -150,3 +150,14 @@ def test_owner_can_send_todays_stock_to_the_assistant(owner_client, maira):
     row = next(line for line in content.decode().splitlines() if line.startswith("SR-003,"))
     assert dataset_id == "dataset-1" and maira.trained == ["dataset-1"]
     assert ",1850,20,no," in row  # price, then the stock after the order: 25 - 5
+
+
+def test_an_order_confirmed_in_the_chat_reaches_the_orders_tab_marked_as_chat(owner_client):
+    owner_client.post("/api/orders", json={"customer": DELIVERY, "source": "chat", "items": [
+        {"product_code": "SR-003", "size": "M", "colour": "Mustard"}]})
+    owner_client.post("/api/orders", json={"customer": DELIVERY, "items": [  # the checkout page, as before
+        {"product_code": "SR-003", "size": "S", "colour": "White"}]})
+
+    data = owner_client.get("/api/owner/orders").get_json()
+    assert [order["source"] for order in data["orders"]] == ["website", "chat"]  # newest first
+    assert (data["summary"]["order_count"], data["summary"]["chat_orders"]) == (2, 1)
