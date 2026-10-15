@@ -37,7 +37,7 @@ Tests 10 and 11 check the order line from profile rule 7.
 
 | # | Question | Expected behaviour | Answer | Pass? | Top score | Prompt tokens |
 |---|---|---|---|---|---|---|
-| 1 | I'm going to a wedding next week. What do you have under 4,000 taka? | Recommends the **Shapla Three-Piece Set** (৳3,500, sizes S, M, L, XL), the only piece listed for wedding guests. May add a festive set such as the Jharna Embroidered Kurti Set (৳3,400). Invents nothing. | | | | |
+| 1 | I need something for Eid. What do you have under 3,000 taka? | Recommends up to three **festive** pieces priced under ৳3,000, each with price and sizes (for example the Agni Ombre Tiered Maxi Dress at ৳2,950). Offers nothing over budget and invents nothing. The shop has no wedding-guest occasion since Oct 14. | | | | |
 | 2 | Is the Akash shirt dress in stock? | Says the **Akash Striped Ruffle Shirt Dress is out of stock** and suggests another office piece, likely the **Mishti Check Kurti Dress** (৳1,750). | | | | |
 | 3 | What's good to wear in hot weather? | Suggests up to three cotton pieces, such as the **Nilima Bow-Print Flutter Top**, **Bokul Floral Collared Maxi Dress** or **Mishti Check Kurti Dress**, each with price and sizes. | | | | |
 | 4 | Do you sell shoes? | **Refuses to guess:** says the store doesn't sell shoes and names no made-up products. | | | | |
