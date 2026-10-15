@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ProductCard from '../components/ProductCard.vue'
 import { useShop } from '../stores/shop.js'
+import { SECTIONS, sectionTitle } from '../utils/sections.js'
 
 const shop = useShop()
 const route = useRoute()
@@ -19,16 +20,6 @@ const products = computed(() => shop.products.filter((product) =>
   (!customizable.value || product.customizable),
 ))
 
-// The collection is shown in sections, in this order. The first name is the product's
-// category in the CSV; the second is the heading customers see. A category not listed
-// here still gets its own section at the end, under its own name.
-const SECTIONS = [
-  ['Dress', 'Dresses'],
-  ['Top', 'Tops'],
-  ['Bottoms', 'Pants and skirts'],
-  ['Co-ord set', 'Sets'],
-]
-const sectionTitle = (name) => SECTIONS.find(([category]) => category === name)?.[1] || name
 
 const sections = computed(() => {
   const known = SECTIONS.map(([name]) => name)
