@@ -28,6 +28,11 @@ CUSTOMIZE_MARKER = re.compile(r"\[CUSTOMIZE\b([^\]]*)\]", re.IGNORECASE)
 # A customer asking to order, in English, Banglish or Bangla. Used only when the assistant
 # forgot its order line, so a clear "I want to order it" still starts the order.
 ORDER_WORDS = re.compile(r"\b(order|buy|purchase|checkout|kinbo|kinte|nibo|nebo)\b|অর্ডার|কিনব|নেব", re.IGNORECASE)
+# ...but not a question about ordering ("tumi ki customized order nite paro na?", "how do I order?"),
+# and not a made-for-you piece, which rule 8 and the product page handle. The assistant answers those.
+NOT_AN_ORDER = re.compile(
+    r"\?|\b(can|could|do|does|how|what|why|when|where|is|are|ki|kivabe|kibhabe|keno|kemne|paro|paren|parben|jay|jabe)\b"
+    r"|custom|change|measure|sleeve|length|shorter|longer|lining|hata|কি|কী|কীভাবে|কিভাবে|পারেন|পারো|যাবে|কাস্টম|মাপ|হাতা|লম্বা", re.IGNORECASE)
 SIZE_IN_TEXT = re.compile(r"\bsize\s*([a-z0-9]+)\b", re.IGNORECASE)
 
 
@@ -158,7 +163,7 @@ def order_from_question(tenant: Tenant, question: str, mentioned: list[Product])
     start the order for that product anyway; the chat asks for the rest. Without this,
     a model that keeps asking "Would you like it in Yellow?" never lets the customer order.
     """
-    if len(mentioned) != 1 or not ORDER_WORDS.search(question):
+    if len(mentioned) != 1 or not ORDER_WORDS.search(question) or NOT_AN_ORDER.search(question):
         return None
     size = SIZE_IN_TEXT.search(question)
     try:

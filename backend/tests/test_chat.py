@@ -140,6 +140,19 @@ def test_an_order_starts_even_when_the_assistant_forgets_its_order_line(client, 
     assert (order["product"]["code"], order["size"], order["colour"]) == ("SR-003", "M", "")
 
 
+def test_a_question_about_ordering_starts_no_order(client, maira):
+    # Oct 15: "can't you take customized orders?" started an order and asked for a size
+    maira.answer = "Yes, the **Bela Tiered Sundress** can be ordered. What would you like to change?"
+    for question in ["tumi ki customized order nite paro na", "How do I order?", "Can I order this?",
+                     "eta ki order kora jabe", "I want to order it with shorter sleeves"]:
+        assert client.post("/api/chat", json={"message": question}).get_json()["order"] is None, question
+
+
+def test_a_plain_request_to_order_in_banglish_starts_the_order(client, maira):
+    maira.answer = "**Bela Tiered Sundress** অর্ডার করতে কোন সাইজটি চান?"
+    assert client.post("/api/chat", json={"message": "eta order korte chai"}).get_json()["order"] is not None
+
+
 def test_no_order_starts_without_a_request_to_order(client, maira):
     maira.answer = "Try the **Bela Tiered Sundress**."
     assert client.post("/api/chat", json={"message": "something for summer?"}).get_json()["order"] is None
