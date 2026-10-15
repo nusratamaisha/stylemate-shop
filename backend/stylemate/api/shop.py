@@ -97,7 +97,7 @@ def price_quote():
     body = json_body()
     tenant = current_tenant()
     product = catalog.get_product(tenant, str(body.get("product_code") or ""))
-    return jsonify(pricing.quote_for(tenant, product, body.get("option_ids") or []).to_dict())
+    return jsonify(pricing.quote_for(tenant, product, body.get("option_ids") or [], body.get("measurements")).to_dict())
 
 
 @bp.post("/chat")

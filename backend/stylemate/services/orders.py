@@ -54,7 +54,7 @@ def place_order(tenant: Tenant, customer: dict, items: list[dict], account: Cust
 def _build_item(tenant: Tenant, item: dict, uploads_dir: str = "") -> OrderItem:
     product = get_product(tenant, str(item.get("product_code") or ""))
     size, colour = str(item.get("size") or ""), str(item.get("colour") or "")
-    quote = quote_for(tenant, product, item.get("option_ids") or [])
+    quote = quote_for(tenant, product, item.get("option_ids") or [], item.get("measurements"))
     details = quote.details
     if quote.needs_measurements:
         # Cut to the customer's body, so there is no S, M or L to choose

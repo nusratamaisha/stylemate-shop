@@ -37,6 +37,7 @@ class Quote:
     total_bdt: int = 0
     ready_in_days: int | None = None  # None for regular (non-custom) items
     details: str = ""  # for the customer and the tailor, e.g. "Sleeves: Short sleeves; Length: Shorter by 2 inches (50 in)"
+    descriptions: list[str] = field(default_factory=list)  # the same wording, one per extra, for the price box
     needs_measurements: bool = False  # made to measure: the order takes measurements, not a size
 
     @property
@@ -46,7 +47,8 @@ class Quote:
     def to_dict(self) -> dict:
         return {
             "base_price_bdt": self.base_price_bdt,
-            "extras": [option.to_dict() for option in self.extras],
+            "extras": [{**option.to_dict(), "description": description}
+                       for option, description in zip(self.extras, self.descriptions)],
             "total_bdt": self.total_bdt,
             "ready_in_days": self.ready_in_days,
             "is_custom": self.is_custom,
@@ -55,8 +57,13 @@ class Quote:
         }
 
 
-def calculate_quote(product: Product, options: list[CustomizationOption], base_days: int) -> Quote:
-    """Price a product with the chosen options. Pure function: no database, easy to test."""
+def calculate_quote(product: Product, options: list[CustomizationOption], base_days: int,
+                    measurements: dict[str, int] | None = None) -> Quote:
+    """Price a product with the chosen options. Pure function: no database, easy to test.
+
+    `measurements` is given when the options were worked out from the customer's numbers
+    (measured_options()); the details then say what each piece is cut to.
+    """
     if options and not product.customizable:
         raise UserInputError(f"{product.name} can't be customized.")
 
@@ -68,15 +75,15 @@ def calculate_quote(product: Product, options: list[CustomizationOption], base_d
         if already_has(product, option):
             raise UserInputError(f"{product.name} already has {option.label.lower()}.")
     measured = any(option.needs_measurements for option in options)
-    if measured and any(option.length_change_inches for option in options):
+    if measured and measurements is None and any(option.length_change_inches for option in options):
         # A made-to-measure piece is cut to the exact length the customer gives
         raise UserInputError("With made to measure, give your exact length in your measurements instead of a length change.")
 
     total = product.price_bdt + sum(option.extra_price_bdt for option in options)
     days = base_days + sum(option.extra_days for option in options) if options else None
-    details = "; ".join(_describe(product, option) for option in options)
-    return Quote(base_price_bdt=product.price_bdt, extras=list(options),
-                 total_bdt=total, ready_in_days=days, details=details, needs_measurements=measured)
+    descriptions = [_describe(product, option, measurements or {}) for option in options]
+    return Quote(base_price_bdt=product.price_bdt, extras=list(options), total_bdt=total, ready_in_days=days,
+                 details="; ".join(descriptions), descriptions=descriptions, needs_measurements=measured)
 
 
 def already_has(product: Product, option: CustomizationOption) -> bool:
@@ -96,16 +103,64 @@ def new_length(product: Product, option: CustomizationOption) -> int | None:
     return product.length_inches + option.length_change_inches
 
 
-def _describe(product: Product, option: CustomizationOption) -> str:
+def _describe(product: Product, option: CustomizationOption, measurements: dict[str, int]) -> str:
+    # Worked out from the customer's numbers: say what it is cut to, not "by 2 inches"
+    if option.length_change_inches and "length" in measurements:
+        longer = "longer" if option.length_change_inches > 0 else "shorter"
+        return f"{option.group}: {longer} than shown, cut to {measurements['length']} in"
+    if option.group == SLEEVE_GROUP and "sleeve_length" in measurements:
+        return f"{option.group}: {option.label}, cut to {measurements['sleeve_length']} in"
     length = new_length(product, option)
     return f"{option.group}: {option.label}" + (f" ({length} in)" if length else "")
 
 
 
-def quote_for(tenant: Tenant, product: Product, option_ids: list[int]) -> Quote:
-    """Load the chosen options (only this shop's) and price the product."""
+def quote_for(tenant: Tenant, product: Product, option_ids: list[int], measurements=None) -> Quote:
+    """Load the chosen options (only this shop's) and price the product.
+
+    With measurements, the piece is made to measure and the customer doesn't pick sleeve or
+    length changes: measured_options() works them out from the numbers. Any sleeve, length or
+    fit option sent as well is replaced by what the numbers say (a sleeve chosen in the chat,
+    "Sleeveless" for example, stays when no sleeve length is given).
+    """
     options = load_options(tenant, option_ids)
-    return calculate_quote(product, options, tenant.custom_base_days)
+    numbers = clean_measurements(measurements, require_all=False) if measurements else {}
+    if not numbers:
+        return calculate_quote(product, options, tenant.custom_base_days)
+    replaced = [option for option in options if option.needs_measurements or option.length_change_inches
+                or (option.group == SLEEVE_GROUP and "sleeve_length" in numbers)]
+    options = [option for option in options if option not in replaced] + measured_options(tenant, product, numbers)
+    options.sort(key=lambda option: option.position)
+    return calculate_quote(product, options, tenant.custom_base_days, numbers)
+
+
+def measured_options(tenant: Tenant, product: Product, numbers: dict[str, int]) -> list[CustomizationOption]:
+    """The options a customer's own measurements imply, so they never have to pick them.
+
+    Always the made-to-measure option. Then, compared with the piece as shown:
+    - a sleeve length longer or shorter than this piece's sleeve (size guide lengths) picks the
+      shop's sleeve option on that side that comes closest, e.g. 21 in on a short sleeve = Full sleeves;
+    - a length longer or shorter than the piece picks the matching length option.
+    A difference of 1 inch or less counts as unchanged.
+    """
+    shop = db.session.scalars(db.select(CustomizationOption)
+                              .where(CustomizationOption.tenant_id == tenant.id)).all()
+    chosen = [option for option in shop if option.needs_measurements][:1]
+
+    sleeve = numbers.get("sleeve_length")
+    table = {**sleeve_lengths(tenant), "sleeveless": 0}
+    now = table.get(sleeve_word(product.sleeve or ""))
+    if sleeve and now is not None and abs(sleeve - now) > 1:
+        side = [option for option in shop if option.group == SLEEVE_GROUP and not already_has(product, option)
+                and sleeve_word(option.label) in table and (table[sleeve_word(option.label)] - now) * (sleeve - now) > 0]
+        chosen += sorted(side, key=lambda option: abs(table[sleeve_word(option.label)] - sleeve))[:1]
+
+    length = numbers.get("length")
+    if length and product.length_inches and abs(length - product.length_inches) > 1:
+        wanted = length - product.length_inches
+        side = [option for option in shop if option.length_change_inches * wanted > 0]
+        chosen += sorted(side, key=lambda option: abs(option.length_change_inches - wanted))[:1]
+    return chosen
 
 
 def load_options(tenant: Tenant, option_ids: list[int]) -> list[CustomizationOption]:

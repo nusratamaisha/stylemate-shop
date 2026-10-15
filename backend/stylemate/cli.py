@@ -39,8 +39,9 @@ DEFAULT_FAQ = [
      "Open the Size guide from the top menu, or tap \"Size guide\" beside the sizes on any product page. "
      "It lists the bust, waist and hip each size is cut for. Between two sizes, choose the larger one."),
     ("Can I change a dress to suit me?",
-     "Yes, on pieces marked \"Can be customized\". Under \"Make it yours\" you can change the sleeves, length, "
-     "lining or fit, and the price updates as you choose."),
+     "Yes, on pieces marked \"Can be customized\". Under \"Make it yours\" type your measurements in inches "
+     "(bust, and if you like waist, sleeve length and length). We cut the piece to them at no extra charge; longer "
+     "sleeves or a longer length cost a little more, shorter ones a little less, and the price updates as you type."),
     ("How long does a customized piece take?",
      "We make it to order. It is ready in about 7 days, plus the extra days shown for each change you choose. "
      "The product page shows the expected date before you order."),
@@ -75,7 +76,7 @@ DEFAULT_OPTIONS = [
     ("Length", "Shorter by 2 inches", -100, 1, -2, False),
     ("Length", "Longer by 2 inches", 250, 2, 2, False),
     ("Lining", "Add full cotton lining", 300, 2, 0, False),
-    ("Fit", "Made to your measurements", 300, 3, 0, True),
+    ("Fit", "Made to your measurements", 0, 3, 0, True),  # free since Oct 15: sleeves and length are charged from the numbers
 ]
 
 # (size, bust, waist, hip): the body each size is cut for, in inches

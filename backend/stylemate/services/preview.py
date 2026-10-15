@@ -56,7 +56,7 @@ class PreviewService:
             check_picture(photo.mimetype, photo.content)
 
         # DRY: pricing.py already checks the options (this shop's, one per group, product is customizable)
-        quote = pricing.quote_for(tenant, product, option_ids or [])
+        quote = pricing.quote_for(tenant, product, option_ids or [], measurements)
         if not (quote.is_custom or wish or photo):
             raise UserInputError("Choose a change, describe an idea, or add your photo first.")
         # Only a try-on needs the fit: without a person in the picture, a size changes nothing.

@@ -91,8 +91,11 @@ def test_made_to_measure_needs_no_size(client):
     assert response.status_code == 201
     item = response.get_json()["items"][0]
     assert item["size"] == "Made to measure"
-    assert item["unit_price_bdt"] == 4200 + 300 - 150
-    assert item["custom_details"] == ("Sleeves: Sleeveless; Fit: Made to your measurements; "
+    # No charge for made to measure. A 20 in sleeve on this full-sleeved (23 in) piece is nearest the short
+    # sleeve (-100), replacing the Sleeveless sent along, and 36 in instead of 56 is shorter (-100)
+    assert item["unit_price_bdt"] == 4200 - 100 - 100
+    assert item["custom_details"] == ("Sleeves: Short sleeves, cut to 20 in; Length: shorter than shown, cut to 36 in; "
+                                      "Fit: Made to your measurements; "
                                       "Measurements: bust 38 in, waist 32 in, sleeve length 20 in, length 36 in")
 
 
@@ -199,3 +202,31 @@ def test_an_unknown_order_source_is_refused(client):
     response = client.post("/api/orders", json={"customer": CUSTOMER, "source": "facebook", "items": [
         {"product_code": "SR-003", "size": "M", "colour": "Mustard"}]})
     assert response.status_code == 400
+
+
+def quote(client, code, **measurements):
+    return client.post("/api/price-quote", json={"product_code": code, "measurements": measurements}).get_json()
+
+
+def test_measurements_alone_make_the_piece_to_measure_at_no_extra_charge(client):
+    data = quote(client, "SR-002", bust=38)
+    assert data["needs_measurements"] and data["total_bdt"] == 4200
+    assert [extra["label"] for extra in data["extras"]] == ["Made to your measurements"]
+
+
+def test_a_longer_sleeve_length_adds_the_full_sleeve_charge(client):
+    # SR-006 has short sleeves (7 in in the size guide); 21 in is nearest the full sleeve (23 in)
+    data = quote(client, "SR-006", bust=36, sleeve_length=21)
+    assert data["total_bdt"] == 1650 + 200
+    assert "Sleeves: Full sleeves, cut to 21 in" in data["details"]
+
+
+def test_a_longer_length_adds_the_longer_charge_and_a_close_one_changes_nothing(client):
+    assert quote(client, "SR-006", bust=36, length=42)["total_bdt"] == 1650 + 250  # 38 in as shown
+    assert quote(client, "SR-006", bust=36, length=39, sleeve_length=8)["total_bdt"] == 1650  # within an inch
+
+
+def test_a_sleeve_chosen_in_the_chat_stays_when_no_sleeve_length_is_given(client):
+    response = client.post("/api/price-quote", json={"product_code": "SR-002", "measurements": {"bust": 38},
+                                                    "option_ids": [option_id("Sleeves", "Sleeveless")]})
+    assert response.get_json()["total_bdt"] == 4200 - 150
