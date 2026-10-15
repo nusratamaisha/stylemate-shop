@@ -3,6 +3,7 @@
 // and handles typing and the microphone.
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import ChatOrderCard from './ChatOrderCard.vue'
 import ProductImage from './ProductImage.vue'
 import { useBag } from '../stores/bag.js'
 import { useChat } from '../stores/chat.js'
@@ -20,8 +21,6 @@ const chat = useChat()
 const bag = useBag()
 const router = useRouter()
 
-// The customer confirmed an order in the chat and Flask checked it. The answer shows a
-// "Go to checkout" link; pressing it puts the piece in the bag and opens the checkout page.
 // The customer described a made-for-them piece in the chat. Open its page with those
 // choices filled in; the price and the rest of the measurements are settled there.
 function goToCustomize(message) {
@@ -32,6 +31,8 @@ function goToCustomize(message) {
 const describeCustomize = ({ sleeves, measurements }) =>
   [sleeves, ...Object.entries(measurements).map(([name, inches]) => `${name.replace('_', ' ')} ${inches} in`)].filter(Boolean).join(' · ')
 
+// The customer confirmed an order in the chat and Flask checked it. ChatOrderCard lets them finish it
+// in the chat; its "Go to checkout" link lands here, puts the piece in the bag and opens the checkout page.
 function goToCheckout(message) {
   const order = message.order
   if (!message.inBag) {
@@ -166,19 +167,9 @@ watch(
             <span v-if="message.viaVoice" class="spoken">Spoken</span>
           </div>
 
-          <div v-else class="bubble stylist">
+          <div v-else class="bubble stylist" :class="{ wide: message.order }">
             <div class="answer" v-html="renderMarkdown(message.text)"></div>
-            <div v-if="message.order" class="order">
-              <p class="order-summary">
-                <strong>{{ message.order.product.name }}</strong><br />
-                Size {{ message.order.size }}, {{ message.order.colour }}<span v-if="message.order.quantity > 1">, {{ message.order.quantity }} pieces</span>
-                · {{ formatTaka(message.order.unit_price_bdt * message.order.quantity) }}
-              </p>
-              <button type="button" class="button small" @click="goToCheckout(message)">
-                {{ message.inBag ? 'Back to checkout' : 'Go to checkout' }}
-              </button>
-              <p class="order-note">You’ll add your name, phone and address there.</p>
-            </div>
+            <ChatOrderCard v-if="message.order" :order="message.order" :in-bag="message.inBag" @checkout="goToCheckout(message)" />
             <div v-else-if="message.customize" class="order">
               <p class="order-summary">
                 <strong>{{ message.customize.product.name }}</strong>, made for you<br />
@@ -345,6 +336,7 @@ watch(
 .suggestion:hover { border-color: var(--sindoor); }
 
 .bubble { max-width: 88%; }
+.bubble.wide { max-width: 100%; } /* room for the order form */
 .bubble p { margin: 0; }
 .customer {
   align-self: flex-end;

@@ -129,7 +129,7 @@ async function logOut() {
     <!-- Every order, with the sales numbers -->
     <section v-if="tab === 'sales' && sales" class="panel">
       <div class="stats four">
-        <div class="stat"><span class="stat-value">{{ sales.summary.order_count }}</span><span>orders</span></div>
+        <div class="stat"><span class="stat-value">{{ sales.summary.order_count }}</span><span>orders, {{ sales.summary.chat_orders }} confirmed in the chat</span></div>
         <div class="stat">
           <span class="stat-value">{{ formatTaka(sales.summary.sales_bdt) }}</span>
           <span>sales, plus {{ formatTaka(sales.summary.delivery_bdt) }} delivery collected</span>
@@ -158,6 +158,8 @@ async function logOut() {
       <article v-for="order in sales.orders" :key="order.order_id" class="order-card">
         <header class="order-head">
           <strong>Order #{{ order.order_id }}</strong>
+          <!-- Orders the customer confirmed in the stylist chat, not on the checkout page -->
+          <span v-if="order.source === 'chat'" class="tag chat">Chat</span>
           <span class="muted small">{{ formatDate(order.ordered_at) }}</span>
           <span class="order-total">{{ formatTaka(order.total_bdt) }}</span>
         </header>
@@ -388,6 +390,7 @@ async function logOut() {
   align-items: baseline;
   gap: 12px;
 }
+.tag.chat { background: var(--sindoor-wash); color: var(--sindoor-deep); }
 .order-total {
   margin-left: auto;
   font-weight: 600;
