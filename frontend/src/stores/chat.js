@@ -2,7 +2,7 @@
 // The chat widget only displays this state; the logic lives here.
 import { reactive } from 'vue'
 import { api } from '../api.js'
-import { applyAnswer, matchTypedAnswer, newDraft, nextQuestion } from '../utils/chatOrder.js'
+import { applyAnswer, doneText, languageOf, matchTypedAnswer, newDraft, nextQuestion } from '../utils/chatOrder.js'
 import { loadJSON, saveJSON } from '../utils/storage.js'
 import { visitorId } from '../utils/visitor.js'
 
@@ -23,7 +23,7 @@ function addStylistReply(reply) {
   state.messages.push({ role: 'stylist', text: reply.answer, products: reply.products || [], customize: reply.customize || null })
   // The customer wants to order: Flask checked the product, so ask for whatever is still missing
   if (reply.order) {
-    const draft = newDraft(++draftCount, reply.order)
+    const draft = newDraft(++draftCount, reply.order, languageOf(reply.answer))
     state.drafts[draft.id] = draft
     askNext(draft)
   }
@@ -33,7 +33,7 @@ function addStylistReply(reply) {
 function askNext(draft) {
   const question = nextQuestion(draft)
   if (question) state.messages.push({ role: 'stylist', text: question.text, question, draftId: draft.id, answered: null })
-  else state.messages.push({ role: 'stylist', text: "Here's your order. Check it and go to checkout when you're ready.", draftId: draft.id })
+  else state.messages.push({ role: 'stylist', text: doneText(draft), draftId: draft.id })
 }
 
 function answer(message, choice) {
@@ -60,7 +60,8 @@ export function useChat() {
     // Ask the same order's questions again, e.g. after "Change my answers". A new draft,
     // so the summary already in the chat keeps showing what it showed.
     restartOrder(draftId) {
-      const draft = newDraft(++draftCount, state.drafts[draftId].order)
+      const old = state.drafts[draftId]
+      const draft = newDraft(++draftCount, old.order, old.lang)
       state.drafts[draft.id] = draft
       askNext(draft)
     },
