@@ -21,14 +21,18 @@ async function load() {
   saved.value = false
   try {
     page.value = await api(`/products/${encodeURIComponent(props.code)}/reviews`)
-    form.rating = page.value.my_review?.rating || 0
-    form.comment = page.value.my_review?.comment || ''
+    clearForm() // the customer's own review is in the list above, not left in the box
   } catch (err) {
     error.value = err.message
   }
 }
 // Reload when the product changes, and when the customer logs in or out (it changes who may review)
 watch([() => props.code, () => account.state.customer], load, { immediate: true })
+
+function clearForm() {
+  form.rating = 0
+  form.comment = ''
+}
 
 async function save() {
   saving.value = true
@@ -39,6 +43,7 @@ async function save() {
       body: { rating: form.rating, comment: form.comment },
     })
     saved.value = true
+    clearForm() // posted: it now shows in the list, so the box starts empty again
   } catch (err) {
     error.value = err.message
   } finally {
@@ -72,6 +77,7 @@ async function save() {
 
       <form v-if="page.can_review" class="form" @submit.prevent="save">
         <h3>{{ page.my_review ? 'Change your review' : 'Write a review' }}</h3>
+        <p v-if="page.my_review" class="muted small">Your review is shown above. Writing a new one replaces it.</p>
         <fieldset class="rating">
           <legend>Your rating</legend>
           <label v-for="value in 5" :key="value" class="star-choice" :class="{ on: value <= form.rating }">
