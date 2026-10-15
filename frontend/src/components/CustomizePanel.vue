@@ -1,6 +1,8 @@
 <script setup>
-// "Make it yours": choose changes and see the price, which Flask calculates.
-// Choosing "Made to your measurements" replaces S/M/L with the customer's own measurements.
+// "Make it yours": the customer types their measurements and sees the price, which Flask calculates.
+// There are no sleeve, length or fit buttons (Oct 15): typing any measurement makes the piece
+// made to measure, and Flask works out the sleeve and length charges from the numbers
+// (pricing.measured_options()). Leaving every box empty orders a standard size.
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { api } from '../api.js'
@@ -22,9 +24,9 @@ const MEASUREMENTS = [
   { key: 'length', label: 'Length', required: false, min: 20, max: 72 },
 ]
 
-// One choice per group; null means "as shown".
-const choices = reactive(Object.fromEntries(props.product.customization.map((group) => [group.group, null])))
 const measurements = reactive({ bust: '', waist: '', sleeve_length: '', length: '' })
+// A change the stylist chat handed over that no number can say, such as "Sleeveless" (see applyFromAddress)
+const chatOptionIds = ref([])
 const notes = ref('')
 // A picture for the tailor: uploaded when chosen, because the bag can't hold a file
 const picture = ref(null) // { name (from the server), filename, previewUrl }
@@ -34,22 +36,13 @@ const pictureError = ref('')
 const quote = ref(null)
 const error = ref('')
 
-const allOptions = computed(() => props.product.customization.flatMap((group) =>
-  group.options.map((option) => ({ ...option, group: group.group }))))
-// The option that means "cut to my body", if the shop offers one
-const measureOption = computed(() => allOptions.value.find((option) => option.needs_measurements) || null)
-const madeToMeasure = computed(() => Boolean(measureOption.value) && choices[measureOption.value.group] === measureOption.value.id)
-// A made-to-measure piece is cut to the exact length typed in, so the "2 inches shorter" options don't apply
-const hiddenGroups = computed(() => (madeToMeasure.value
-  ? props.product.customization.filter((group) => group.options.some((option) => option.new_length_inches)).map((group) => group.group)
-  : []))
-
-const optionIds = computed(() => Object.entries(choices)
-  .filter(([group, id]) => id !== null && !hiddenGroups.value.includes(group))
-  .map(([, id]) => id))
-
 const cleanMeasurements = computed(() => Object.fromEntries(
   Object.entries(measurements).filter(([, value]) => value !== '' && value !== null).map(([key, value]) => [key, Number(value)])))
+// Only numbers in range are priced, so a half-typed "3" on the way to "36" doesn't flash an error
+const validMeasurements = computed(() => Object.fromEntries(MEASUREMENTS
+  .filter(({ key, min, max }) => cleanMeasurements.value[key] >= min && cleanMeasurements.value[key] <= max)
+  .map(({ key }) => [key, cleanMeasurements.value[key]])))
+const madeToMeasure = computed(() => Object.keys(cleanMeasurements.value).length > 0)
 const measurementsComplete = computed(() => MEASUREMENTS.every(({ key, required, min, max }) => {
   const value = cleanMeasurements.value[key]
   return value === undefined ? !required : value >= min && value <= max
@@ -57,7 +50,10 @@ const measurementsComplete = computed(() => MEASUREMENTS.every(({ key, required,
 const measurementsText = computed(() => MEASUREMENTS.filter(({ key }) => cleanMeasurements.value[key] !== undefined)
   .map(({ key, label }) => `${label.toLowerCase()} ${cleanMeasurements.value[key]} in`).join(', '))
 
-// Smart check: if a standard size already fits these measurements, say so. It saves the customer the made-to-measure charge.
+// The options Flask chose (made to measure, sleeves, length), sent with the order; checkout works them out again
+const optionIds = computed(() => (quote.value?.is_custom ? quote.value.extras.map((extra) => extra.id) : []))
+
+// Smart check: if a standard size already fits these measurements, say so. It ships now instead of being sewn.
 const standardSize = computed(() => {
   const { bust, waist, sleeve_length: sleeve, length } = cleanMeasurements.value
   if (!madeToMeasure.value || !bust) return null
@@ -73,21 +69,31 @@ const standardSize = computed(() => {
 })
 
 let requestNumber = 0
+let typingTimer = null
 async function refreshQuote() {
   const thisRequest = ++requestNumber
   error.value = ''
+  const measured = Object.keys(validMeasurements.value).length > 0
+  if (!measured && !chatOptionIds.value.length) {
+    quote.value = null // nothing to make: the standard piece at its listed price
+    return
+  }
   try {
     const result = await api('/price-quote', {
       method: 'POST',
-      body: { product_code: props.product.code, option_ids: optionIds.value },
+      body: { product_code: props.product.code, option_ids: chatOptionIds.value, measurements: measured ? validMeasurements.value : null },
     })
     if (thisRequest === requestNumber) quote.value = result // ignore answers to older requests
   } catch (err) {
     if (thisRequest === requestNumber) error.value = err.message
   }
 }
+// Wait until the customer pauses typing, so each keystroke isn't a request
+watch([validMeasurements, chatOptionIds], () => {
+  clearTimeout(typingTimer)
+  typingTimer = setTimeout(refreshQuote, 300)
+})
 
-watch(optionIds, refreshQuote, { immediate: true })
 watch([quote, notes, optionIds, cleanMeasurements, picture], () => {
   emit('change', {
     quote: quote.value,
@@ -100,10 +106,6 @@ watch([quote, notes, optionIds, cleanMeasurements, picture], () => {
     measurementsText: madeToMeasure.value ? measurementsText.value : '',
   })
 })
-
-function pick(group, id) {
-  choices[group] = choices[group] === id ? null : id
-}
 
 async function choosePicture(event) {
   const file = event.target.files[0]
@@ -135,24 +137,20 @@ function removePicture() {
 }
 
 function useStandardSize(size) {
-  choices[measureOption.value.group] = null
+  for (const key of Object.keys(measurements)) measurements[key] = ''
   emit('use-size', size)
 }
 
 // Arriving from the stylist chat: the changes the customer described are in the address,
-// e.g. ?sleeves=Sleeveless&bust=38&length=36. Fill them in; the price is still worked out here.
+// e.g. ?sleeves=Sleeveless&bust=38&length=36. Fill them in; the price is still worked out by Flask.
 function applyFromAddress() {
   const query = route.query
-  const sleeves = allOptions.value.find((option) => option.label === query.sleeves)
-  if (sleeves) choices[sleeves.group] = sleeves.id
-  let anyMeasurement = false
+  const sleeves = props.product.customization.flatMap((group) => group.options).find((option) => option.label === query.sleeves)
+  if (sleeves) chatOptionIds.value = [sleeves.id]
   for (const { key } of MEASUREMENTS) {
-    if (query[key]) {
-      measurements[key] = Number(query[key]) || ''
-      anyMeasurement = true
-    }
+    if (query[key]) measurements[key] = Number(query[key]) || ''
   }
-  if (anyMeasurement && measureOption.value) choices[measureOption.value.group] = measureOption.value.id
+  refreshQuote()
 }
 applyFromAddress()
 </script>
@@ -161,39 +159,11 @@ applyFromAddress()
   <section class="customize" aria-labelledby="customize-title">
     <h2 id="customize-title" class="title">Make it yours</h2>
     <p class="muted small">
-      Change the sleeves, length, lining or fit. We make it to order and the price updates as you choose:
-      changes that use less fabric cost less.
+      Type your measurements and we sew it to fit you, at no extra charge. Longer sleeves or a longer length
+      cost a little more, shorter ones a little less: the price updates as you type.
     </p>
 
-    <template v-for="group in product.customization" :key="group.group">
-      <fieldset v-if="!hiddenGroups.includes(group.group)" class="group">
-        <legend>{{ group.group }} <span v-if="group.current" class="current">now: {{ group.current }}</span></legend>
-        <div class="pills">
-          <button
-            type="button"
-            class="pill"
-            :aria-pressed="choices[group.group] === null"
-            @click="choices[group.group] = null"
-          >
-            {{ group.options.some((option) => option.needs_measurements) ? 'Standard size' : 'As shown' }}
-          </button>
-          <button
-            v-for="option in group.options"
-            :key="option.id"
-            type="button"
-            class="pill"
-            :aria-pressed="choices[group.group] === option.id"
-            @click="pick(group.group, option.id)"
-          >
-            {{ option.label }}<template v-if="option.new_length_inches"> ({{ option.new_length_inches }} in)</template><template v-else-if="option.sleeve_length_inches"> (about {{ option.sleeve_length_inches }} in)</template>
-            <span class="extra" :class="{ saving: option.extra_price_bdt < 0 }">{{ formatPriceChange(option.extra_price_bdt) }}</span>
-          </button>
-        </div>
-      </fieldset>
-    </template>
-
-    <!-- Made to measure: the customer's own measurements take the place of S, M or L -->
-    <fieldset v-if="madeToMeasure" class="group measure">
+    <fieldset class="group measure">
       <legend>Your measurements <span class="current">in inches</span></legend>
       <div class="measure-grid">
         <div v-for="item in MEASUREMENTS" :key="item.key">
@@ -201,22 +171,23 @@ applyFromAddress()
             {{ item.label }} <span v-if="!item.required" class="muted">(optional)</span>
           </label>
           <input :id="`measure-${item.key}`" v-model="measurements[item.key]" type="number" inputmode="numeric"
-            :min="item.min" :max="item.max" step="1" :required="item.required"
+            :min="item.min" :max="item.max" step="1"
             :placeholder="item.key === 'length' && product.length_inches ? String(product.length_inches) : ''" />
         </div>
       </div>
       <p class="muted small hint">
-        Measure your body, not a garment. Only the bust is needed; add the others if this piece needs them.
+        Measure your body, not a garment. Only the bust is needed; add the others if you want them changed.
         Leave length empty to keep it as shown<span v-if="product.length_inches"> ({{ product.length_inches }} in)</span>.
-        Sleeve length is from the shoulder seam to where the sleeve should end. No need to choose S, M or L.
+        Sleeve length is from the shoulder seam to where the sleeve should end.
+        Leave every box empty to order a standard size.
       </p>
 
       <p v-if="standardSize?.size && standardSize.close && standardSize.sameLength" class="tip small" role="status">
         Good news: these measurements match our size <strong>{{ standardSize.size }}</strong>.
         <button type="button" class="text-button" @click="useStandardSize(standardSize.size)">
-          Order size {{ standardSize.size }} and save {{ formatTaka(measureOption.extra_price_bdt) }}
-        </button>,
-        or keep made to measure for an exact fit.
+          Order size {{ standardSize.size }} ready-made
+        </button>
+        and it ships without the sewing wait, or keep made to measure for an exact fit.
       </p>
       <p v-else-if="standardSize && !standardSize.size" class="tip small" role="status">
         None of this piece’s standard sizes fits these measurements, so made to measure is the right choice.
@@ -243,24 +214,18 @@ applyFromAddress()
         <p v-if="pictureError" class="message error" role="alert">{{ pictureError }}</p>
       </div>
 
-      <!-- The price comes only from the options chosen above, never from what is typed or attached here. -->
+      <!-- The price comes only from the measurements, never from what is typed or attached here. -->
       <p v-if="(notes.trim() || picture) && !optionIds.length" class="notes-warning small" role="status">
-        Your note or picture isn’t sent yet. They go with made-to-order pieces only, so choose a change above.
-        <template v-if="measureOption">
-          To have it cut to your measurements, choose
-          <button type="button" class="text-button" @click="pick(measureOption.group, measureOption.id)">
-            {{ measureOption.label }} ({{ formatPriceChange(measureOption.extra_price_bdt) }})
-          </button>.
-        </template>
-        Without a change, you get the standard size at the listed price.
+        Your note or picture isn’t sent yet. They go with pieces made to order, so add your measurements above.
+        Without them, you get the standard size at the listed price.
       </p>
     </div>
 
     <p v-if="error" class="message error">{{ error }}</p>
     <div v-else-if="quote" class="summary" aria-live="polite">
-      <div class="line"><span>Dress</span><span>{{ formatTaka(quote.base_price_bdt) }}</span></div>
+      <div class="line"><span>{{ product.name }}</span><span>{{ formatTaka(quote.base_price_bdt) }}</span></div>
       <div v-for="extra in quote.extras" :key="extra.id" class="line">
-        <span>{{ extra.label }}</span><span>{{ formatPriceChange(extra.extra_price_bdt) }}</span>
+        <span>{{ extra.description || extra.label }}</span><span>{{ extra.extra_price_bdt ? formatPriceChange(extra.extra_price_bdt) : 'Free' }}</span>
       </div>
       <div class="line total"><span>Total</span><span>{{ formatTaka(quote.total_bdt) }}</span></div>
       <p v-if="quote.is_custom" class="ready small">
@@ -284,26 +249,19 @@ applyFromAddress()
 .group {
   border: 0;
   padding: 0;
-  margin: 18px 0 0;
+  margin: 14px 0 0;
 }
 legend {
   font-weight: 600;
   margin-bottom: 8px;
   padding: 0;
 }
-.extra,
 .current {
   color: var(--muted);
   font-weight: 400;
 }
-.extra {
-  margin-left: 6px; /* keeps "+৳200" apart from the option's name */
-}
 .current {
   margin-left: 6px;
-}
-.extra.saving {
-  color: var(--ok);
 }
 .picture {
   margin-top: 14px;
@@ -355,9 +313,6 @@ legend {
   border-radius: var(--radius);
   background: #fbf2dc;
   color: #6b4a05;
-}
-.pill[aria-pressed='true'] .extra {
-  color: #e9dde0;
 }
 .field {
   margin-top: 20px;

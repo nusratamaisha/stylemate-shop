@@ -38,16 +38,16 @@ async function load() {
 }
 watch(() => props.code, load, { immediate: true })
 
-const isCustom = computed(() => custom.value.optionIds.length > 0)
+// Typing any measurement makes it made to measure at once, before Flask's price arrives
+const madeToMeasure = computed(() => custom.value.madeToMeasure)
+const isCustom = computed(() => custom.value.optionIds.length > 0 || madeToMeasure.value)
 const price = computed(() => (isCustom.value && custom.value.quote ? custom.value.quote.total_bdt : product.value?.price_bdt))
 const stockText = computed(() => {
   const stock = product.value?.stock ?? 0
-  if (stock === 0) return product.value?.customizable ? 'Out of stock ready-made. Choose a change below and we’ll make one for you.' : 'Out of stock'
+  if (stock === 0) return product.value?.customizable ? 'Out of stock ready-made. Add your measurements below and we’ll make one for you.' : 'Out of stock'
   if (stock <= 5) return `Only ${stock} left`
   return 'In stock'
 })
-// A made-to-measure piece is cut to the customer's measurements, so it has no S, M or L
-const madeToMeasure = computed(() => isCustom.value && custom.value.madeToMeasure)
 const canAdd = computed(() => {
   if (!product.value || !colour.value) return false
   if (madeToMeasure.value) return Boolean(custom.value.quote) && custom.value.measurementsComplete
