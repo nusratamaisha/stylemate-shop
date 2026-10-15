@@ -35,6 +35,7 @@ class Tenant(db.Model):
     maira_help_dataset_id: Mapped[str] = mapped_column(String(64), default="")  # FAQ and size guide; made by `flask sync-help`
     maira_image_profile_id: Mapped[str] = mapped_column(String(64), default="")  # empty: no image preview
     recommender_ready: Mapped[bool] = mapped_column(default=False)  # set by `flask sync-recommender`; off: the shop's own picks
+    plan: Mapped[str] = mapped_column(String(20), default="growth")  # a key of services/plans.PLANS; `flask set-plan`
     custom_base_days: Mapped[int] = mapped_column(default=7)
     shipping_inside_dhaka_bdt: Mapped[int] = mapped_column(default=80)
     shipping_outside_dhaka_bdt: Mapped[int] = mapped_column(default=150)
@@ -243,6 +244,36 @@ class RateLimitEvent(db.Model):
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenant.id"))
     action: Mapped[str] = mapped_column(String(40))
     sender_key: Mapped[str] = mapped_column(String(64), index=True)  # a hash of the IP address, never the address
+    created_at: Mapped[datetime] = mapped_column(default=utc_now)
+
+
+class PlanUsage(db.Model):
+    """How much of its plan a shop used in one month, e.g. 312 chat questions in 2026-10 (services/plans.py)."""
+
+    __table_args__ = (UniqueConstraint("tenant_id", "kind", "month"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenant.id"))
+    kind: Mapped[str] = mapped_column(String(20))  # "chat" or "preview"
+    month: Mapped[str] = mapped_column(String(7))  # "2026-10"
+    count: Mapped[int] = mapped_column(default=0)
+
+
+class DemoRequest(db.Model):
+    """A shop owner asking for a StyleMate demo from the public page.
+
+    StyleMate's own lead, not any shop's data, so it has no tenant_id (the one table
+    without one). Listed with `flask demo-requests`.
+    """
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    shop_name: Mapped[str] = mapped_column(String(120))
+    owner_name: Mapped[str] = mapped_column(String(120))
+    phone: Mapped[str] = mapped_column(String(40))
+    facebook_page: Mapped[str] = mapped_column(String(300), default="")
+    product_count: Mapped[str] = mapped_column(String(40), default="")
+    plan: Mapped[str] = mapped_column(String(20), default="")
+    message: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(default=utc_now)
 
 

@@ -11,11 +11,13 @@ from dataclasses import dataclass, field
 from ..errors import UserInputError
 from ..extensions import db
 from ..models import ChatTurn, Product, Tenant
-from . import pricing
+from . import plans, pricing
 from .catalog import list_products
 from .sizes import sleeve_word
 
 MAX_QUESTION_LENGTH = 500
+OVER_PLAN = ("Our stylist can't answer more questions right now. "
+             "Please message the shop from the Help page, and they'll reply to you.")
 MAX_PRODUCT_CARDS = 3
 MAX_ORDER_QUANTITY = 10
 # The line the Maira profile is told to write as soon as a customer wants to order, e.g.
@@ -110,6 +112,7 @@ class ChatService:
             raise UserInputError("Please type a question.")
         if len(question) > MAX_QUESTION_LENGTH:
             raise UserInputError(f"Please keep questions under {MAX_QUESTION_LENGTH} characters.")
+        plans.require(tenant, "chat", OVER_PLAN)  # the shop's monthly questions (services/plans.py)
 
         result = self._maira.ask(
             user_id=visitor_id,
@@ -125,6 +128,7 @@ class ChatService:
         if order is None and customize is None:
             order = order_from_question(tenant, question, products, _previous_answer(tenant, session_id), catalogue)
 
+        plans.record(tenant, "chat")  # counted only once Maira has answered
         db.session.add(ChatTurn(
             tenant_id=tenant.id,
             visitor_id=visitor_id,

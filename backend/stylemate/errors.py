@@ -13,6 +13,10 @@ class RateLimitError(Exception):
     """One visitor has done something too many times today. Shown as a 429."""
 
 
+class PlanLimitError(RateLimitError):
+    """The shop has used its plan's monthly allowance (services/plans.py). Also shown as a 429."""
+
+
 class ServiceUnavailableError(Exception):
     """Maira or Chorus failed or timed out. Shown as a friendly 502."""
 

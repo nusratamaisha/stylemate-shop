@@ -21,6 +21,7 @@ import time
 from ..errors import ServiceUnavailableError
 from ..extensions import db
 from ..models import Customer, Product, Tenant
+from . import plans
 from .catalog import get_product, list_products
 
 log = logging.getLogger(__name__)
@@ -53,8 +54,8 @@ class RecommendationService:
                           other_sections=True)
 
     def _ask(self, tenant: Tenant, key: tuple, call) -> list[str]:
-        """Gigalogy's suggestions, cached; [] when it isn't set up yet or doesn't answer."""
-        if not tenant.recommender_ready:
+        """Gigalogy's suggestions, cached; [] when it isn't set up, not in the shop's plan, or doesn't answer."""
+        if not (tenant.recommender_ready and plans.plan_of(tenant).smart_recommendations):
             return []
         key = (tenant.id, *key)
         cached = self._cache.get(key)

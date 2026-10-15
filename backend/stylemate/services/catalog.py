@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from ..errors import ServiceUnavailableError, UserInputError
 from ..extensions import db
 from ..models import Product, Tenant
+from . import plans
 
 REQUIRED_COLUMNS = ["product_id", "name", "category", "sizes", "colours", "price_bdt", "stock",
                     "customizable", "description"]
@@ -121,6 +122,8 @@ class CatalogImporter:
 
     def import_csv(self, tenant: Tenant, filename: str, content: bytes) -> ImportResult:
         rows = parse_products_csv(content)
+        # The shop's plan caps its catalogue: existing products plus new ones in this file
+        plans.check_product_count(tenant, len({product.code for product in list_products(tenant)} | {row["code"] for row in rows}))
         result = save_products(tenant, rows)
 
         if not tenant.maira_dataset_id:

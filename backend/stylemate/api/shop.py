@@ -3,7 +3,9 @@
 from flask import Blueprint, current_app, jsonify, request, send_from_directory
 
 from ..clients import ReferenceImage
-from ..services import accounts, catalog, help, limits, orders, payments, pricing, sizes, uploads
+from ..errors import UserInputError
+from ..services import accounts, catalog, demo_requests, help, limits, orders, payments, plans, pricing, sizes, uploads
+from ..services.chat import OVER_PLAN
 from .helpers import current_customer, current_tenant, error, json_body, sender_key, services
 
 bp = Blueprint("shop", __name__, url_prefix="/api")
@@ -22,6 +24,7 @@ def shop_info():
         "payment": payments.payment_options(tenant),
         "categories": sorted({product.category for product in products}),
         "occasions": sorted({occasion for product in products for occasion in product.to_dict()["occasions"]}),
+        "features": plans.features(tenant),  # what the shop's plan includes, e.g. the voice button
     })
 
 
@@ -37,7 +40,8 @@ def product_detail(code: str):
     data = product.to_dict()
     data["customization"] = pricing.options_for(tenant, product) if product.customizable else []
     data["custom_base_days"] = tenant.custom_base_days
-    data["preview_available"] = bool(tenant.maira_image_profile_id)
+    # Hidden without an image profile, or when the shop's plan has no previews left this month
+    data["preview_available"] = bool(tenant.maira_image_profile_id) and plans.features(tenant)["previews"]
     return jsonify(data)
 
 
@@ -47,12 +51,16 @@ def product_preview(code: str):
     tenant = current_tenant()
     photo = request.files.get("photo")
     limit = current_app.config["PREVIEWS_PER_DAY"]
+
+    def before_drawing():  # called by the service after its checks pass and just before the paid call
+        plans.require(tenant, "preview", "Picture previews aren't available right now. Please ask the shop instead.")
+        limits.use(tenant, "preview", sender_key(), limit,
+                   "You've reached today's limit for picture previews. Please try again tomorrow.")
+
     preview = services().preview.create(
         tenant,
         catalog.get_product(tenant, code),
-        # Called by the service after its checks pass and just before the paid call
-        before_drawing=lambda: limits.use(tenant, "preview", sender_key(), limit,
-                                          "You've reached today's limit for picture previews. Please try again tomorrow."),
+        before_drawing=before_drawing,
         visitor_id=_visitor_id(request.form.get("visitor_id")),
         colour=request.form.get("colour") or "",
         option_ids=request.form.getlist("option_ids"),
@@ -61,6 +69,7 @@ def product_preview(code: str):
         measurements={name: request.form.get(name) for name in pricing.MEASUREMENTS},
         photo=ReferenceImage(photo.filename or "photo", photo.read(), photo.mimetype or "") if photo else None,
     )
+    plans.record(tenant, "preview")  # counted only once the picture came back
     return jsonify(preview.to_dict())
 
 
@@ -118,6 +127,11 @@ def voice():
     audio = request.files.get("audio")
     if audio is None:
         return error("No recording received.", 400)
+    tenant = current_tenant()
+    # Checked before Chorus is paid to listen: voice is in the plan, and questions are left this month
+    if not plans.plan_of(tenant).voice:
+        raise UserInputError("Voice questions aren't available in this shop. Please type your question.")
+    plans.require(tenant, "chat", OVER_PLAN)
 
     transcript = services().chorus.transcribe(audio.read(), filename=audio.filename or "question.wav",
                                               mimetype=audio.mimetype or "audio/wav")
@@ -126,7 +140,7 @@ def voice():
                         "message": "Sorry, I didn't catch that. Could you try again?"})
 
     reply = services().chat.reply(
-        current_tenant(),
+        tenant,
         visitor_id=_visitor_id(request.form.get("visitor_id")),
         question=transcript,
         session_id=request.form.get("session_id") or None,
@@ -173,6 +187,23 @@ def bag_recommendations():
     codes = [str(code) for code in body.get("codes") or []][:20]
     return jsonify(services().recommendations.for_bag(
         current_tenant(), codes, _visitor_id(body.get("visitor_id")), current_customer()))
+
+
+# --- StyleMate's own public page (selling to shop owners), not the shop's ---
+
+@bp.get("/plans")
+def plan_list():
+    return jsonify(plans.public_plans())
+
+
+@bp.post("/demo-requests")
+def request_demo():
+    """A Facebook shop owner asks for a demo. Limited per visitor like contact messages."""
+    # The limit table is per shop, so the installation's shop holds the count
+    limits.use(current_tenant(), "demo_request", sender_key(), current_app.config["CONTACT_MESSAGES_PER_DAY"],
+               "You've already sent several requests today. We'll be in touch soon.")
+    demo_requests.save_request(json_body())
+    return jsonify({"ok": True}), 201
 
 
 @bp.get("/images/<path:filename>")

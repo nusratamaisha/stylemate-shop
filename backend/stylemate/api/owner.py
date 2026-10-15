@@ -4,7 +4,7 @@ from flask import Blueprint, current_app, g, jsonify, request, send_from_directo
 
 from ..extensions import db
 from ..models import User
-from ..services import catalog, help, insights, orders, payments
+from ..services import catalog, help, insights, orders, payments, plans
 from .helpers import error, json_body, owner_required, services
 
 bp = Blueprint("owner", __name__, url_prefix="/api/owner")
@@ -32,6 +32,13 @@ def logout():
 @owner_required
 def me():
     return jsonify(_owner_info(g.user))
+
+
+@bp.get("/usage")
+@owner_required
+def plan_usage():
+    """This month's use of the shop's plan, for the dashboard's warning banner."""
+    return jsonify(plans.usage_summary(g.tenant))
 
 
 @bp.get("/insights")

@@ -11,6 +11,7 @@ from .extensions import db
 from .models import CustomizationOption, FaqItem, SizeGuideRow, SleeveLength, Tenant, User
 from .clients.recommender import KEY_MAP
 from .services.catalog import parse_products_csv, save_products
+from .services import demo_requests, plans
 from .services.recommendations import set_up_recommender
 
 SHOP = {
@@ -103,6 +104,8 @@ def register_cli(app: Flask) -> None:
     app.cli.add_command(seed)
     app.cli.add_command(sync_help)
     app.cli.add_command(sync_recommender)
+    app.cli.add_command(set_plan)
+    app.cli.add_command(list_demo_requests)
 
 
 @click.command("sync-help")
@@ -138,6 +141,35 @@ def sync_recommender() -> None:
     except (UserInputError, ServiceUnavailableError) as exc:
         raise click.ClickException(f"{exc}\nNothing was switched on: the shop keeps showing its own picks.") from exc
     click.echo(f"Done: {count} products sent and trained. Product pages and the bag now ask Gigalogy.")
+
+
+@click.command("set-plan")
+@click.argument("plan")
+def set_plan(plan: str) -> None:
+    """Put the shop on a plan (starter, growth or pro), e.g. after its monthly bKash payment."""
+    tenant = db.session.scalar(db.select(Tenant).where(Tenant.slug == current_app.config["SHOP_SLUG"]))
+    if tenant is None:
+        raise click.ClickException("The shop isn't set up yet. Run: uv run flask seed")
+    try:
+        chosen = plans.set_plan(tenant, plan)
+    except UserInputError as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"{tenant.name} is now on {chosen.name} (৳{chosen.price_bdt:,} a month).")
+
+
+@click.command("demo-requests")
+def list_demo_requests() -> None:
+    """List the shops that asked for a demo on the public StyleMate page, newest first."""
+    requests = demo_requests.all_requests()
+    if not requests:
+        click.echo("No demo requests yet.")
+    for item in requests:
+        click.echo(f"#{item.id} {item.created_at:%d %b %Y}  {item.shop_name} ({item.owner_name}, {item.phone})"
+                   f"{'  plan: ' + item.plan if item.plan else ''}")
+        for label, value in (("Facebook", item.facebook_page), ("Products", item.product_count),
+                             ("Message", item.message)):
+            if value:
+                click.echo(f"    {label}: {value}")
 
 
 @click.command("seed")
