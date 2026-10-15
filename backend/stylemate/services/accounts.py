@@ -1,8 +1,11 @@
-"""Customer accounts: signing up, logging in, and a customer's own order history."""
+"""Customer accounts: signing up, logging in, the details they save, and their own order history."""
+
+import json
 
 from ..errors import UserInputError
 from ..extensions import db
 from ..models import Customer, Order, Tenant
+from .pricing import DELIVERY_AREAS, MADE_TO_MEASURE_SIZE, clean_measurements
 
 MIN_PASSWORD_LENGTH = 8
 
@@ -31,6 +34,55 @@ def authenticate(tenant: Tenant, email, password) -> Customer | None:
     customer = _find(tenant, _clean_email(email))
     if customer is None or not customer.check_password(str(password or "")):
         return None
+    return customer
+
+
+def remember_details(customer: Customer, order: Order, measured: dict[str, int] | None) -> None:
+    """After an order the customer agreed to remember, keep what they typed for next time.
+
+    Contact and delivery details fill in checkout; the size and measurements are what the
+    product page and, later, recommendations start from. The transaction ID is never kept.
+    The caller commits, so this is saved with the order or not at all.
+    """
+    customer.phone = order.phone
+    customer.address = order.address
+    customer.delivery_area = order.delivery_area
+    customer.payment_method = order.payment_method
+    ready_made = [line.size for line in order.items if line.size != MADE_TO_MEASURE_SIZE]
+    if ready_made:
+        customer.preferred_size = ready_made[-1]
+    if measured:
+        customer.measurements = json.dumps(measured)
+
+
+def update_details(customer: Customer, details: dict) -> Customer:
+    """The customer changes or clears what is saved, from their account page. Only the fields sent change."""
+    details = details if isinstance(details, dict) else {}
+    if "name" in details:
+        name = str(details["name"] or "").strip()
+        if not name:
+            raise UserInputError("Please tell us your name.")
+        customer.name = name[:120]
+    if "phone" in details:
+        customer.phone = str(details["phone"] or "").strip()[:40]
+    if "address" in details:
+        customer.address = str(details["address"] or "").strip()[:500]
+    if "delivery_area" in details:
+        area = str(details["delivery_area"] or "")
+        if area and area not in DELIVERY_AREAS:
+            raise UserInputError("Please choose inside or outside Dhaka.")
+        customer.delivery_area = area
+    if "payment_method" in details:
+        method = str(details["payment_method"] or "")
+        if method and method not in Order.PAYMENT_METHODS:
+            raise UserInputError("Please choose a way to pay.")
+        customer.payment_method = method
+    if "preferred_size" in details:
+        customer.preferred_size = str(details["preferred_size"] or "").strip()[:20]
+    if "measurements" in details:  # empty clears them; otherwise checked like an order's
+        numbers = clean_measurements(details["measurements"], require_all=False) if details["measurements"] else {}
+        customer.measurements = json.dumps(numbers) if numbers else ""
+    db.session.commit()
     return customer
 
 

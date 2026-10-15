@@ -40,6 +40,13 @@ def me():
     return jsonify({"customer": customer.to_dict() if customer else None})
 
 
+@bp.patch("/account/details")
+@customer_required
+def update_details():
+    """The customer changes or clears the details saved for checkout."""
+    return jsonify({"customer": accounts.update_details(g.customer, json_body()).to_dict()})
+
+
 @bp.get("/account/orders")
 @customer_required
 def my_orders():

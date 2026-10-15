@@ -9,6 +9,7 @@ from datetime import date, timedelta
 from ..errors import UserInputError
 from ..extensions import db
 from ..models import Customer, Order, OrderItem, Product, Tenant
+from .accounts import remember_details
 from .catalog import get_product
 from .payments import check_payment
 from .uploads import picture_exists
@@ -18,11 +19,13 @@ MAX_QUANTITY = 10
 
 
 def place_order(tenant: Tenant, customer: dict, items: list[dict], account: Customer | None = None,
-                uploads_dir: str = "", payment: dict | None = None, source: str = "website") -> Order:
+                uploads_dir: str = "", payment: dict | None = None, source: str = "website",
+                remember: bool = False) -> Order:
     """Check and save an order. `account` is the logged-in customer, or None for a guest checkout.
 
     `source` says where the customer confirmed it: "website" (the checkout page) or "chat".
     Both go through exactly the same checks, so a chat order is priced and stocked like any other.
+    `remember`: the logged-in customer ticked "save my details", so they're filled in next time.
     """
     if source not in Order.SOURCES:
         raise UserInputError("Unknown order source.")
@@ -45,6 +48,11 @@ def place_order(tenant: Tenant, customer: dict, items: list[dict], account: Cust
         order.items.append(_build_item(tenant, item, uploads_dir))
     _take_from_stock(order.items)
     order.total_bdt = sum(line.unit_price_bdt * line.quantity for line in order.items) + shipping
+
+    if account and remember:
+        measured = next((clean_measurements(item.get("measurements")) for item, line in zip(items, order.items)
+                         if line.size == MADE_TO_MEASURE_SIZE), None)
+        remember_details(account, order, measured)
 
     db.session.add(order)
     db.session.commit()

@@ -4,6 +4,7 @@ Every table has a tenant_id, so one StyleMate installation can serve many shops.
 Today there is one shop (Closet Corner); adding another is a new Tenant row.
 """
 
+import json
 from datetime import date, datetime, timezone
 
 from sqlalchemy import ForeignKey, String, Text, UniqueConstraint
@@ -76,6 +77,13 @@ class Customer(db.Model):
     phone: Mapped[str] = mapped_column(String(40), default="")
     password_hash: Mapped[str] = mapped_column(String(300))
     created_at: Mapped[datetime] = mapped_column(default=utc_now)
+    # Remembered from their last order (if they agreed), so checkout fills itself in next time.
+    # Size and measurements are also what future recommendations will start from.
+    address: Mapped[str] = mapped_column(Text, default="")
+    delivery_area: Mapped[str] = mapped_column(String(20), default="")
+    payment_method: Mapped[str] = mapped_column(String(20), default="")  # never a transaction ID
+    preferred_size: Mapped[str] = mapped_column(String(20), default="")  # their last ready-made size
+    measurements: Mapped[str] = mapped_column(Text, default="")  # JSON, e.g. {"bust": 36}, from a made-to-measure order
 
     def set_password(self, password: str) -> None:
         self.password_hash = generate_password_hash(password)
@@ -84,7 +92,9 @@ class Customer(db.Model):
         return check_password_hash(self.password_hash, password)
 
     def to_dict(self) -> dict:
-        return {"name": self.name, "email": self.email, "phone": self.phone}
+        return {"name": self.name, "email": self.email, "phone": self.phone, "address": self.address,
+                "delivery_area": self.delivery_area, "payment_method": self.payment_method,
+                "preferred_size": self.preferred_size, "measurements": json.loads(self.measurements or "{}")}
 
 
 class Product(db.Model):

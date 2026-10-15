@@ -19,7 +19,8 @@ def test_sign_up_logs_the_customer_in(client):
     response = sign_up(client)
     assert response.status_code == 201
     assert client.get("/api/account/me").get_json()["customer"] == {
-        "name": "Nadia Rahman", "email": "nadia@example.com", "phone": "01711000000"}
+        "name": "Nadia Rahman", "email": "nadia@example.com", "phone": "01711000000", "address": "",
+        "delivery_area": "", "payment_method": "", "preferred_size": "", "measurements": {}}
 
 
 def test_sign_up_checks_the_details(client):
@@ -99,3 +100,57 @@ def test_customer_reviews_a_piece_they_ordered(app, client):
     assert page["reviews"][0]["name"] == "Nadia"  # first name only
     assert page["reviews"][0]["comment"] == "Even better after a wash."
     assert client.get("/api/products/SR-003/reviews").get_json()["my_review"]["rating"] == 5
+
+
+HOME = {"name": "Nadia Rahman", "phone": "01999000000", "address": "House 4, Road 2, Sylhet", "delivery_area": "outside_dhaka"}
+
+
+def me(client):
+    return client.get("/api/account/me").get_json()["customer"]
+
+
+def test_an_order_remembers_the_details_for_next_time(client):
+    sign_up(client)
+    client.post("/api/orders", json={"customer": HOME, "items": [BELA], "remember": True,
+                                     "payment": {"method": "cash_on_delivery"}})
+
+    saved = me(client)
+    assert (saved["phone"], saved["address"], saved["delivery_area"]) == (
+        "01999000000", "House 4, Road 2, Sylhet", "outside_dhaka")
+    assert (saved["payment_method"], saved["preferred_size"]) == ("cash_on_delivery", "M")
+
+
+def test_a_made_to_measure_order_remembers_the_measurements_but_not_as_a_size(client):
+    from .conftest import option_id
+    sign_up(client)
+    client.post("/api/orders", json={"customer": HOME, "remember": True, "items": [
+        {"product_code": "SR-002", "colour": "Maroon", "option_ids": [option_id("Fit", "Made to your measurements")],
+         "measurements": {"bust": 36, "waist": "30"}}]})
+    saved = me(client)
+    assert saved["measurements"] == {"bust": 36, "waist": 30} and saved["preferred_size"] == ""
+
+
+def test_nothing_is_remembered_without_the_tick_or_for_a_guest(client):
+    client.post("/api/orders", json={"customer": HOME, "items": [BELA], "remember": True})  # a guest: no account
+    sign_up(client)
+    client.post("/api/orders", json={"customer": HOME, "items": [BELA]})  # box unticked
+    assert me(client)["address"] == ""
+
+
+def test_a_customer_can_change_or_clear_their_saved_details(client):
+    sign_up(client)
+    response = client.patch("/api/account/details", json={"address": "Flat 3B, Dhanmondi", "delivery_area": "inside_dhaka",
+                                                          "preferred_size": "L", "measurements": {"bust": "38"}})
+    assert response.status_code == 200
+    saved = me(client)
+    assert (saved["address"], saved["preferred_size"], saved["measurements"]) == ("Flat 3B, Dhanmondi", "L", {"bust": 38})
+    assert saved["name"] == "Nadia Rahman"  # fields not sent stay as they were
+
+    client.patch("/api/account/details", json={"preferred_size": "", "measurements": None})
+    assert (me(client)["preferred_size"], me(client)["measurements"]) == ("", {})
+    assert client.patch("/api/account/details", json={"delivery_area": "the moon"}).status_code == 400
+    assert client.patch("/api/account/details", json={"name": ""}).status_code == 400
+
+
+def test_saved_details_need_a_login(client):
+    assert client.patch("/api/account/details", json={"address": "x"}).status_code == 401
