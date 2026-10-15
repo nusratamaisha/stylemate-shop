@@ -44,6 +44,7 @@ Each file has one job. If you know what you want to change, this table tells you
 | `clients/base.py` | Shared HTTP code for Gigalogy: keys, headers and error handling, written once |
 | `clients/maira.py` | Asks Maira for answers and for pictures; uploads and trains the dataset; reads the `detail` wrapper |
 | `clients/chorus.py` | Uploads audio to Chorus and checks back until the text is ready |
+| `clients/recommender.py` | Gigalogy's recommender: sets up the catalogue there (index, column mapping, upload, training) and asks for similar items |
 | `services/chat.py` | The assistant: asks Maira, finds the products it mentioned, checks an order it proposes, flags unanswered questions, saves the turn |
 | `services/pricing.py` | Custom prices and ready dates |
 | `services/accounts.py` | Customer accounts: signing up, logging in, a customer's own order history |
@@ -54,6 +55,7 @@ Each file has one job. If you know what you want to change, this table tells you
 | `services/payments.py` | How an order is paid: cash on delivery, or a bKash, Nagad or Rocket transaction ID that the owner checks |
 | `services/sizes.py` | The size guide: what body each size fits, and how long each kind of sleeve is |
 | `services/preview.py` | Image preview: checks the request, writes the prompt, asks Maira for the picture |
+| `services/recommendations.py` | "You may also like" and "Complete the look": Gigalogy's suggestions, filtered to what the shop can sell this customer, with the shop's own picks as backup |
 | `services/orders.py` | Checkout and the custom order queue |
 | `services/catalog.py` | Reading products and importing a CSV |
 | `services/insights.py` | Numbers for the owner dashboard |
@@ -247,6 +249,21 @@ This covers two wishes with one flow. "Show me this dress with my changes" draws
 - The account page's **My details** (`SavedDetails.vue`, `PATCH /api/account/details`) shows everything saved, lets the customer change it, and has "Forget my size and measurements".
 - **Next: recommendations.** The saved size and measurements, plus the order history already in the database, are what a "pieces that fit you" feature would start from.
 
+### J. Suggestions: "You may also like" and "Complete the look"
+
+Step 1 of recommendations (Oct 15). Gigalogy's recommender (same server and keys as Maira) keeps its own copy of the catalogue and suggests pieces by **content**, so it works from day one without customer history.
+
+1. **Once, by hand:** `uv run flask sync-recommender` creates the item index, maps our columns to the recommender's fields (`KEY_MAP` in `clients/recommender.py`), uploads the products and trains, then sets `Tenant.recommender_ready`. Run it again after the catalogue changes. Until it has run, no call is made.
+2. **Product page:** `RecommendedProducts.vue` calls `GET /api/products/<code>/recommendations`. Flask asks `POST /v1/items/recommend` for items like this one.
+3. **Bag:** the same component calls `POST /api/recommendations/bag` with the codes in the bag. Flask asks `POST /v1/carts/recommend`, which looks at everything in the bag together.
+4. `services/recommendations.py` keeps only pieces of this shop that aren't the one shown or already in the bag, that are in stock or customizable, and that come in the customer's **usual size** (saved from their orders; a customizable piece can be made to their measurements, so it stays). Gigalogy knows neither our stock nor sizes, so this filter is ours.
+5. Fewer than four left, Gigalogy not set up yet, or Gigalogy down: the **shop's own picks** fill the row (shared occasion, then the same section on a product page or another section in the bag, then the nearest price). A suggestion row never shows an error.
+6. Answers are cached for 10 minutes per product or bag, so a busy page isn't a paid call every view.
+
+**Open question:** the spec gives every response as `{"detail": object}`, so `parse_item_ids()` accepts a list of IDs or of `{"item_id": ...}` objects anywhere inside `detail`. Confirm the real shape on the first live call and tighten it.
+
+**Next steps (not built):** send page views, purchases and review ratings to the recommender (`/v1/items/browse`, `/v1/items/purchase`, `/v1/items/rating`), then "Picked for you" with `/v1/users/recommend`.
+
 ### H. A customer needs help
 
 1. "Help" in the top menu opens `HelpView.vue`, which loads `GET /api/help`: the shop's questions and answers (`FaqItem` rows) and its contact details (four fields on the `Tenant` row).
@@ -287,7 +304,7 @@ Run them from `backend/`:
 uv run pytest
 ```
 
-There are 139 tests. They use the fake clients, so they need no keys, cost nothing and run in seconds. They cover response parsing (including the `detail` wrapper and string scores), Chorus polling and timeouts, pricing rules, checkout that ignores tampered prices, the unanswered flag, the owner login wall, CSV import errors, and the image preview (the prompt, the order of reference pictures, and every refusal).
+There are 148 tests. They use the fake clients, so they need no keys, cost nothing and run in seconds. They cover response parsing (including the `detail` wrapper and string scores), Chorus polling and timeouts, pricing rules, checkout that ignores tampered prices, the unanswered flag, the owner login wall, CSV import errors, and the image preview (the prompt, the order of reference pictures, and every refusal).
 
 ## 7. Known limits and next steps
 

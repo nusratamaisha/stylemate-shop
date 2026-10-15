@@ -11,7 +11,7 @@ Status: docs/handoff.md. Architecture: docs/architecture.md. Maira/Chorus API: d
 - Never print `.env` or ask for keys.
 
 ## Commands
-- `backend/`: `uv run pytest` | `uv run flask seed` | `uv run flask run --debug` | `uv run flask sync-help` (FAQ + size guide → Maira)
+- `backend/`: `uv run pytest` | `uv run flask seed` | `uv run flask run --debug` | `uv run flask sync-help` (FAQ + size guide → Maira) | `uv run flask sync-recommender` (catalogue → Gigalogy recommender)
 - `frontend/`: `npm run dev` | `npm run build`
 
 ## Rules
@@ -34,6 +34,7 @@ Status: docs/handoff.md. Architecture: docs/architecture.md. Maira/Chorus API: d
 - Payment (`services/payments.py`): cash on delivery, or a bKash/Nagad/Rocket transaction ID the owner checks; no gateway, no money moves through the app. Wallet numbers on `Tenant` are sample values.
 - Customer pictures (tailor reference, Help message photo) go through `services/uploads.py`; only the owner can open them.
 - Daily per-visitor limits via `services/limits.py` (hash of IP); limits in `.env`.
+- Recommendations (`services/recommendations.py`): off until `flask sync-recommender` sets `Tenant.recommender_ready`; Flask filters Gigalogy's picks by stock and usual size and falls back to the shop's own picks. Cached 10 minutes.
 
 ## Image preview (`services/preview.py`, live with `gpt-image-2` since Oct 11)
 - Same `/v1/maira/ask` endpoint, with the shop's image profile (`Tenant.maira_image_profile_id`); empty ID hides the feature.
