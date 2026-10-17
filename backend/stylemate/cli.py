@@ -4,6 +4,7 @@ import os
 
 import click
 from flask import Flask, current_app
+from flask_migrate import upgrade
 
 from .config import DATA_DIR
 from .errors import ServiceUnavailableError, UserInputError
@@ -180,8 +181,10 @@ def list_demo_requests() -> None:
 def seed(owner_email: str, owner_password: str, products_csv: str) -> None:
     """Set up Closet Corner: shop, customization options, products and owner login.
 
-    Safe to run again: it updates what already exists.
+    Safe to run again: it updates what already exists. It first brings the database
+    up to date with the migrations, so a fresh clone needs only this command.
     """
+    upgrade()
     tenant = _upsert_shop()
     _add_default_options(tenant)
     if add_default_faq(tenant):

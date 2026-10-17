@@ -11,8 +11,8 @@ from .api import register_api
 from .api.helpers import Services
 from .cli import register_cli
 from .clients import ChorusClient, MairaClient, RecommenderClient
-from .config import BACKEND_DIR, settings_from_env
-from .extensions import db
+from .config import BACKEND_DIR, MIGRATIONS_DIR, settings_from_env
+from .extensions import db, migrate
 from .services.catalog import CatalogImporter
 from .services.chat import ChatService
 from .services.help import HelpPublisher
@@ -30,6 +30,9 @@ def create_app(config: dict | None = None, *, maira=None, chorus=None, recommend
     app.config.update(config)
 
     db.init_app(app)
+    # Database changes are migrations in backend/migrations/ (`flask db upgrade`).
+    # Batch mode: SQLite can't alter most columns in place, so Alembic copies the table instead.
+    migrate.init_app(app, db, directory=str(MIGRATIONS_DIR), render_as_batch=True)
 
     keys = (app.config["MAIRA_PROJECT_KEY"], app.config["MAIRA_API_KEY"])
     maira = maira or MairaClient(app.config["MAIRA_BASE_URL"], *keys)
@@ -49,7 +52,9 @@ def create_app(config: dict | None = None, *, maira=None, chorus=None, recommend
     register_api(app)
     register_cli(app)
 
-    with app.app_context():
-        db.create_all()
+    if app.config.get("TESTING"):
+        # Tests use a fresh in-memory database each time; test_migrations.py checks the migrations separately
+        with app.app_context():
+            db.create_all()
 
     return app
