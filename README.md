@@ -34,6 +34,25 @@ npm run dev
 
 Open http://localhost:5173. The owner dashboard is at http://localhost:5173/owner.
 
+## Run it with Docker
+
+The same app as one command, the way it would run on a server: nginx serves the built Vue app on port 8080 and passes `/api` to Flask, which runs under gunicorn. You need Docker with Compose, and `backend/.env` filled in as above.
+
+```bash
+docker compose up -d --build                 # build both images and start them
+docker compose exec backend flask seed       # first time only: shop, products and owner login
+```
+
+Open http://localhost:8080 (owner dashboard: http://localhost:8080/owner). The database and customers' pictures live in Docker volumes (`db`, `uploads`), so they survive rebuilds. Product photos come from `data/` on this computer.
+
+| To | Run |
+|---|---|
+| See the backend's log | `docker compose logs -f backend` |
+| Apply new migrations after pulling changes | `docker compose up -d --build` (the backend runs `flask db upgrade` on start) |
+| Run any `flask` command | `docker compose exec backend flask sync-help` |
+| Copy your local database into Docker | `docker compose cp -a backend/stylemate.db backend:/app/var/stylemate.db`, then `docker compose restart backend` |
+| Stop | `docker compose down` (add `-v` to delete the database and pictures too) |
+
 ## Tests
 
 ```bash
@@ -46,8 +65,9 @@ The tests use fake Maira and Chorus clients, so they need no keys and cost nothi
 ## Repository layout
 
 ```
-backend/    Flask API (stylemate package), tests
-frontend/   Vue storefront, chat widget and owner dashboard
+backend/    Flask API (stylemate package), migrations, tests, Dockerfile
+frontend/   Vue storefront, chat widget and owner dashboard, Dockerfile, nginx.conf
+compose.yaml  Runs both in Docker
 data/       Sample products CSV and product photos
 docs/       Architecture guide, Maira API notes, profile and dataset setup, test results
 ```

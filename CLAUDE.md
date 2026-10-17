@@ -13,6 +13,7 @@ Status: docs/handoff.md. Architecture: docs/architecture.md. Maira/Chorus API: d
 ## Commands
 - `backend/`: `uv run pytest` | `uv run flask seed` (runs `flask db upgrade` first) | `uv run flask db migrate -m "..."` / `uv run flask db upgrade` | `uv run flask run --debug` | `uv run flask sync-help` (FAQ + size guide → Maira) | `uv run flask sync-recommender` (catalogue → Gigalogy recommender) | `uv run flask set-plan <starter|growth|pro>` | `uv run flask demo-requests`
 - `frontend/`: `npm run dev` | `npm run build`
+- Docker (repo root): `docker compose up -d --build` → http://localhost:8080 | `docker compose exec backend flask <command>` | `docker compose logs -f backend`. Docker Desktop must be running (`systemctl --user start docker-desktop`); the system daemon needs sudo.
 
 ## Rules
 - Prices and delivery charges only from `services/pricing.py`, never the AI or the browser; checkout recalculates server-side.

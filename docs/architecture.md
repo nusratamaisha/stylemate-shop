@@ -309,6 +309,32 @@ Decided Oct 15: StyleMate is sold to **clothing shops that sell only on Facebook
 
 **Why it is built this way:** the chat answers only from the catalogue, so it needs somewhere to send people when it can't answer. The FAQ covers the predictable questions for free (no Maira call), and the form catches the rest. Messages are stored, not emailed, because the app has no email service and the owner already has a dashboard.
 
+## 3b. Running it in Docker
+
+`compose.yaml` runs the app the way a server would, as two containers:
+
+```
+ browser ──▶ :8080  frontend container: nginx
+                     ├── /, /products/... → the built Vue app (index.html for any page, so Vue Router works)
+                     └── /api/...         → backend container: gunicorn + Flask on port 5000 (not opened to the outside)
+                                              ├── volume "db"      → the SQLite database
+                                              ├── volume "uploads" → customers' pictures
+                                              └── ./data (read-only) → product photos and the sample CSV
+```
+
+| File | What it does |
+|---|---|
+| `frontend/Dockerfile` | Two stages: Node builds the Vue app (`npm run build`), then only the built files are copied into a small nginx image. Node isn't in the final image |
+| `frontend/nginx.conf` | What `vite.config.js`'s proxy does in development: one site for the browser, `/api` passed to Flask. Also allows 6 MB uploads, waits 150 s for a picture preview, and caches built files |
+| `backend/Dockerfile` | Installs the exact versions in `uv.lock`, runs as an ordinary user (not root) who can read but not change the code, and on start runs `flask db upgrade`, then gunicorn with two workers |
+| `compose.yaml` | Joins the two, reads the keys from `backend/.env` when the container starts (they are never copied into an image), and keeps the database and pictures in volumes |
+
+**Why gunicorn:** `flask run` is a development server that handles one request at a time and isn't meant to face the internet. gunicorn runs several copies (workers) of the app, so one slow picture preview doesn't block every other customer.
+
+**Visitors' addresses behind nginx:** every request now arrives from nginx, so the daily limits (which count by IP address) would treat all visitors as one. `PROXY_COUNT=1` makes `create_app()` wrap the app in Werkzeug's `ProxyFix`, which reads the visitor's address from the `X-Forwarded-For` header. nginx *replaces* that header rather than adding to it, so a visitor can't fake an address to get round a limit. `tests/test_proxy.py` checks this.
+
+**Limit:** two gunicorn workers share one SQLite file. That's fine for one shop's traffic. Many shops would need PostgreSQL (set `DATABASE_URL`; check the migrations against it first, see section 7).
+
 ## 4. How it serves many shops
 
 - Every table has a `tenant_id`, and every query filters by it.
@@ -336,7 +362,7 @@ Run them from `backend/`:
 uv run pytest
 ```
 
-There are 160 tests. They use the fake clients, so they need no keys, cost nothing and run in seconds. They cover response parsing (including the `detail` wrapper and string scores), Chorus polling and timeouts, pricing rules, checkout that ignores tampered prices, the unanswered flag, the owner login wall, CSV import errors, the image preview (the prompt, the order of reference pictures, and every refusal), and the migrations (they build the same tables as `models.py`, and can be undone). Every other test builds its tables straight from `models.py` in memory; `test_migrations.py` builds a real database file from the migrations instead.
+There are 161 tests. They use the fake clients, so they need no keys, cost nothing and run in seconds. They cover response parsing (including the `detail` wrapper and string scores), Chorus polling and timeouts, pricing rules, checkout that ignores tampered prices, the unanswered flag, the owner login wall, CSV import errors, the image preview (the prompt, the order of reference pictures, and every refusal), and the migrations (they build the same tables as `models.py`, and can be undone), and visitors' addresses behind a proxy. Every other test builds its tables straight from `models.py` in memory; `test_migrations.py` builds a real database file from the migrations instead.
 
 ## 7. Known limits and next steps
 
