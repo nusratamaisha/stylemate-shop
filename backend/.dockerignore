@@ -1,0 +1,7 @@
+# Kept out of the backend image: secrets, local data and anything rebuilt inside it
+.env
+*.db
+uploads/
+.venv/
+**/__pycache__/
+.pytest_cache/

@@ -1,0 +1,29 @@
+# StyleMate in Docker. From this folder:
+#   docker compose up -d --build                 build and start, then open http://localhost:8080
+#   docker compose exec backend flask seed       first time only: shop, products and owner login
+# More in README.md ("Run it with Docker").
+
+services:
+  backend:
+    build: ./backend
+    env_file: backend/.env  # keys stay out of the image; read when the container starts
+    environment:
+      DATABASE_URL: sqlite:////app/var/stylemate.db  # inside the "db" volume, so it survives rebuilds
+      PROXY_COUNT: "1"  # nginx sits in front: read visitors' addresses from X-Forwarded-For
+    volumes:
+      - db:/app/var
+      - uploads:/app/backend/uploads  # customers' pictures for the tailor and Help messages
+      - ./data:/app/data:ro  # product photos and the sample CSV, which stay out of Git
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "8080:80"  # the only port opened on this computer; Flask is reachable only through nginx
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  db:
+  uploads:
