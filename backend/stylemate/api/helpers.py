@@ -46,8 +46,8 @@ def current_tenant() -> Tenant:
 def sender_key() -> str:
     """Recognises a visitor for daily limits without storing their IP address.
 
-    Behind a proxy or load balancer, request.remote_addr is the proxy's address, so
-    a real deployment must be set up to pass the visitor's address through.
+    Behind a proxy (nginx in Docker), request.remote_addr is the visitor's address only
+    when PROXY_COUNT is set: create_app() then reads it from X-Forwarded-For.
     """
     secret = current_app.config["SECRET_KEY"]
     return hashlib.sha256(f"{secret}:{request.remote_addr}".encode()).hexdigest()

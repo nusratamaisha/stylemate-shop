@@ -6,6 +6,7 @@ Tests pass in fake clients instead, so they never call the real APIs.
 
 from dotenv import load_dotenv
 from flask import Flask
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from .api import register_api
 from .api.helpers import Services
@@ -28,6 +29,11 @@ def create_app(config: dict | None = None, *, maira=None, chorus=None, recommend
     app = Flask(__name__)
     app.config.from_mapping(settings_from_env())
     app.config.update(config)
+
+    if app.config["PROXY_COUNT"]:
+        # Behind nginx, remote_addr is nginx itself; read the visitor's address from X-Forwarded-For,
+        # so daily limits (api/helpers.sender_key) still count each visitor separately
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=app.config["PROXY_COUNT"], x_proto=app.config["PROXY_COUNT"])
 
     db.init_app(app)
     # Database changes are migrations in backend/migrations/ (`flask db upgrade`).

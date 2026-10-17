@@ -31,7 +31,13 @@ def recommender():
 
 
 @pytest.fixture
-def app(maira, chorus, recommender, tmp_path):
+def extra_config():
+    """Settings a test file adds on top of the defaults below (override this fixture in that file)."""
+    return {}
+
+
+@pytest.fixture
+def app(maira, chorus, recommender, tmp_path, extra_config):
     app = create_app(
         {
             "TESTING": True,
@@ -41,6 +47,7 @@ def app(maira, chorus, recommender, tmp_path):
             "UNANSWERED_SCORE_THRESHOLD": 30.0,
             "IMAGES_DIR": str(tmp_path),
             "UPLOADS_DIR": str(tmp_path / "uploads"),
+            **extra_config,
         },
         maira=maira,
         chorus=chorus,
