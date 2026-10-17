@@ -20,7 +20,7 @@ How it all fits together: [docs/architecture.md](docs/architecture.md)
 cd backend
 cp .env.example .env        # then fill in the keys, IDs and SECRET_KEY
 uv sync
-uv run flask --app stylemate seed     # asks for an owner email and password
+uv run flask --app stylemate seed     # builds the tables from the migrations, then asks for an owner email and password
 uv run flask --app stylemate run --debug
 ```
 

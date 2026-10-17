@@ -11,7 +11,7 @@ Status: docs/handoff.md. Architecture: docs/architecture.md. Maira/Chorus API: d
 - Never print `.env` or ask for keys.
 
 ## Commands
-- `backend/`: `uv run pytest` | `uv run flask seed` | `uv run flask run --debug` | `uv run flask sync-help` (FAQ + size guide → Maira) | `uv run flask sync-recommender` (catalogue → Gigalogy recommender) | `uv run flask set-plan <starter|growth|pro>` | `uv run flask demo-requests`
+- `backend/`: `uv run pytest` | `uv run flask seed` (runs `flask db upgrade` first) | `uv run flask db migrate -m "..."` / `uv run flask db upgrade` | `uv run flask run --debug` | `uv run flask sync-help` (FAQ + size guide → Maira) | `uv run flask sync-recommender` (catalogue → Gigalogy recommender) | `uv run flask set-plan <starter|growth|pro>` | `uv run flask demo-requests`
 - `frontend/`: `npm run dev` | `npm run build`
 
 ## Rules
@@ -20,7 +20,7 @@ Status: docs/handoff.md. Architecture: docs/architecture.md. Maira/Chorus API: d
 - Every query filters by `tenant_id` (`current_tenant()`).
 - Services raise `UserInputError` / `ServiceUnavailableError`; no try/except in routes.
 - Run tests/build after changes; add a test per bug fix.
-- No migrations: delete `backend/stylemate.db`, re-seed.
+- Database changes: edit `models.py`, then `uv run flask db migrate -m "..."`, read the generated file in `backend/migrations/versions/`, then `uv run flask db upgrade`. Never `ALTER TABLE` by hand or delete the database. `tests/test_migrations.py` fails if a model changes without a migration.
 - Packages only via `uv add` / `npm install`.
 - Keep docs/architecture.md and docs/handoff.md current.
 - Chorus is async and blocks browsers (Flask only).

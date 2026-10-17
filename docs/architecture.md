@@ -39,6 +39,7 @@ Each file has one job. If you know what you want to change, this table tells you
 | `__init__.py` | `create_app()`: builds the app and decides which Maira and Chorus clients to use |
 | `config.py` | Reads every setting from `.env` |
 | `models.py` | The database tables. Every table has a `tenant_id` |
+| `extensions.py` | The database and migrations objects, plus the naming convention that gives every constraint a name |
 | `errors.py` | Two error types: bad input (400) and a Gigalogy service failing (502) |
 | `cli.py` | `flask seed`: creates the shop, options, size guide, FAQ, products and owner login. `flask sync-help`: sends the FAQ and size guide to Maira |
 | `clients/base.py` | Shared HTTP code for Gigalogy: keys, headers and error handling, written once |
@@ -66,6 +67,20 @@ Each file has one job. If you know what you want to change, this table tells you
 | `api/owner.py` | Owner routes: login, insights, custom orders, CSV upload, customer messages |
 | `api/helpers.py` | Finding the current shop, checking the owner is logged in |
 | `api/__init__.py` | Registers the routes and turns errors into JSON, in one place |
+| `../migrations/versions/` | One file per database change, applied in order by `flask db upgrade` (see below) |
+
+### Changing the database (migrations)
+
+Since October 17, 2026, the tables are built and changed by **migrations** (Flask-Migrate, which wraps Alembic), not by `db.create_all()`. Each file in `backend/migrations/versions/` is one change with an `upgrade()` and a `downgrade()`, and the database's `alembic_version` table records which ones it already has. To change a table, from `backend/`:
+
+```bash
+# 1. edit models.py, then let Alembic write the migration by comparing the models with the database
+uv run flask db migrate -m "add a gift note to orders"
+# 2. read the new file in migrations/versions/ (autogenerate can miss renames), then apply it
+uv run flask db upgrade
+```
+
+`flask seed` runs `upgrade` first, so a fresh clone needs only `flask seed`. SQLite can't alter most columns in place, so migrations run in *batch mode*: Alembic copies the table with the change, moves the rows, and swaps it in. That's why every constraint has a name (`uq_product_tenant_id_code`, set in `extensions.py`): the copy needs to know which constraint is which. The first migration, `5655470f38d1_create_the_tables.py`, builds all 16 tables from nothing. The local database was rebuilt from it on Oct 17, with every row copied across. `tests/test_migrations.py` checks that the migrations always produce exactly what `models.py` describes.
 
 ### Frontend (`frontend/src/`)
 
@@ -311,7 +326,7 @@ Decided Oct 15: StyleMate is sold to **clothing shops that sell only on Facebook
 | **Interface segregation** | `ChatService` needs only an object with `ask()`, and `PreviewService` only one with `generate_image()`. Neither knows about datasets or training. |
 | **Dependency inversion** | `create_app(maira=..., chorus=...)` lets tests pass in the fakes. The services receive their client; they never create it. |
 | **DRY** | Keys and headers: once, in `clients/base.py`. Errors into JSON: once, in `api/__init__.py`. Prices: only `pricing.py`, which the image preview also uses to check options. One CSV feeds both the database and Maira. |
-| **YAGNI** | No payment gateway (the owner checks transaction IDs by hand), no migrations tool, no per-product option menus, no image search. SQLite instead of a database server. Each would be added only when needed. |
+| **YAGNI** | No payment gateway (the owner checks transaction IDs by hand), no per-product option menus, no image search. SQLite instead of a database server. Each would be added only when needed. |
 
 ## 6. Tests
 
@@ -321,7 +336,7 @@ Run them from `backend/`:
 uv run pytest
 ```
 
-There are 158 tests. They use the fake clients, so they need no keys, cost nothing and run in seconds. They cover response parsing (including the `detail` wrapper and string scores), Chorus polling and timeouts, pricing rules, checkout that ignores tampered prices, the unanswered flag, the owner login wall, CSV import errors, and the image preview (the prompt, the order of reference pictures, and every refusal).
+There are 160 tests. They use the fake clients, so they need no keys, cost nothing and run in seconds. They cover response parsing (including the `detail` wrapper and string scores), Chorus polling and timeouts, pricing rules, checkout that ignores tampered prices, the unanswered flag, the owner login wall, CSV import errors, the image preview (the prompt, the order of reference pictures, and every refusal), and the migrations (they build the same tables as `models.py`, and can be undone). Every other test builds its tables straight from `models.py` in memory; `test_migrations.py` builds a real database file from the migrations instead.
 
 ## 7. Known limits and next steps
 
@@ -350,7 +365,7 @@ There are 158 tests. They use the fake clients, so they need no keys, cost nothi
 | Accounts have no password reset, no email confirmation and no limit on wrong password attempts | Needs an email service; add before real customers use it |
 | The owner can't see, hide or answer reviews | Add a Reviews tab to the dashboard if a shop needs moderation |
 | Orders placed as a guest are not attached to an account created later | Fine for a demo |
-| No migrations: tables are created on startup | If you change `models.py`, delete `backend/stylemate.db` and run `flask seed` again |
+| Migrations are written for SQLite (batch mode). Moving to PostgreSQL would need a check of each migration | Run `flask db upgrade` against a PostgreSQL database once and fix anything it refuses |
 | Placeholder swatches instead of photos | Add photos to `data/images/`, named like the CSV `image` column (`SR-001.jpg`) |
 | Profile rule 5 says "contact the shop" for custom prices | Change it to point customers to the "Make it yours" section on the product page (see `maira-profile.md`) |
 
