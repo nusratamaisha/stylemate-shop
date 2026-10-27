@@ -1,10 +1,13 @@
 <script setup>
 // "See it first": a generated picture of the piece with the chosen changes. Without a photo it
 // shows the piece alone (no person); with the customer's photo it shows the chosen size on them.
-// A preview only; the price comes from Flask.
+// A preview only; the price comes from Flask. On a piece that can be made to order, the customer
+// can send the picture to the tailor as their reference picture (Flask saves it: /previews/keep).
 import { computed, ref, watch } from 'vue'
 import { api } from '../api.js'
 import { visitorId } from '../utils/visitor.js'
+
+const emit = defineEmits(['use-as-reference'])
 
 const props = defineProps({
   product: { type: Object, required: true },
@@ -23,6 +26,8 @@ const photoInput = ref(null)
 const loading = ref(false)
 const error = ref('')
 const preview = ref(null)
+const sending = ref(false)
+const sentFor = ref('') // the picture last sent to the tailor, so the button says so
 
 // A try-on shows how one size fits, so it needs a size (or a made-to-measure piece, which has none).
 const needsSize = computed(() => Boolean(photo.value) && !props.size && !props.madeToMeasure)
@@ -78,25 +83,37 @@ async function generate() {
   }
 }
 
+async function sendToTailor() {
+  if (!preview.value || sending.value) return
+  sending.value = true
+  error.value = ''
+  try {
+    const { reference_image: name } = await api('/previews/keep', { method: 'POST', body: { token: preview.value.keep_token } })
+    emit('use-as-reference', { name, previewUrl: preview.value.image_url })
+    sentFor.value = preview.value.image_url
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    sending.value = false
+  }
+}
+
 watch(() => props.product.code, () => {
   preview.value = null
   error.value = ''
+  sentFor.value = ''
 })
 </script>
 
 <template>
   <section class="preview" aria-labelledby="preview-title">
     <h2 id="preview-title" class="title">See it first</h2>
-    <p class="muted small">
-      Get a picture of this piece on its own in {{ colour || 'your colour' }}<span v-if="product.customizable"> with the changes you chose above</span>.
-      Add your photo to see the size you chose on you.
-    </p>
 
     <div v-if="product.customizable" class="field">
       <label for="preview-wish">Describe an idea <span class="muted">(optional)</span></label>
       <textarea id="preview-wish" v-model="wish" rows="2" maxlength="200"
         placeholder="For example: a gold border at the hem"></textarea>
-      <p class="muted small hint">Ideas typed here appear in the picture only. To order one, add it to your notes above and we’ll confirm it with you.</p>
+      <p class="muted small hint">Ideas typed here appear in the picture only. Like the result? Send the picture to the tailor below, and we’ll confirm the idea with you.</p>
     </div>
 
     <div class="field">
@@ -121,13 +138,22 @@ watch(() => props.product.code, () => {
         <span v-if="outdated" class="outdated">You’ve changed your choices since this picture was drawn. </span>
         <span class="muted">An AI-drawn preview: the finished piece may look different. The price above is what you pay.</span>
       </figcaption>
+      <div v-if="product.customizable" class="send">
+        <p v-if="sentFor === preview.image_url" class="message ok small" role="status">
+          Sent to the tailor. It’s now your reference picture under “Make it yours”.
+        </p>
+        <button v-else type="button" class="button secondary small" :disabled="sending" @click="sendToTailor">
+          {{ sending ? 'Sending…' : 'Send this picture to the tailor' }}
+        </button>
+        <p class="muted small hint">It goes with pieces made to order, so add your measurements above.</p>
+      </div>
     </figure>
   </section>
 </template>
 
 <style scoped>
 .preview {
-  margin-top: 24px;
+  margin-top: 20px;
   padding: 24px;
   border: 1px solid var(--line);
   border-radius: var(--radius-large);
@@ -138,7 +164,7 @@ watch(() => props.product.code, () => {
   margin-bottom: 4px;
 }
 .field {
-  margin-top: 16px;
+  margin: 16px 0;
 }
 .hint {
   margin: 6px 0 0;
@@ -153,6 +179,12 @@ watch(() => props.product.code, () => {
 }
 figcaption {
   margin-top: 8px;
+}
+.send {
+  margin-top: 14px;
+}
+.send .message {
+  margin: 0;
 }
 .outdated {
   color: var(--danger);

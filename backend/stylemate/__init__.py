@@ -49,7 +49,7 @@ def create_app(config: dict | None = None, *, maira=None, chorus=None, recommend
         chat=ChatService(maira, app.config["UNANSWERED_SCORE_THRESHOLD"]),
         chorus=chorus,
         catalog_importer=CatalogImporter(maira),
-        preview=PreviewService(maira, app.config["IMAGES_DIR"]),
+        preview=PreviewService(maira, app.config["IMAGES_DIR"], app.config["SECRET_KEY"]),
         help_publisher=HelpPublisher(maira),
         recommender=recommender,
         recommendations=RecommendationService(recommender),

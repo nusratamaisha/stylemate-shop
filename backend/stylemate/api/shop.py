@@ -163,6 +163,15 @@ def upload_reference_picture():
     return jsonify({"reference_image": name}), 201
 
 
+@bp.post("/previews/keep")
+def keep_preview():
+    """A "See it first" picture the customer wants the tailor to see. Returns the name to send with the order."""
+    limits.use(current_tenant(), "reference_picture", sender_key(), current_app.config["REFERENCE_PICTURES_PER_DAY"],
+               "You've sent many pictures today. Please describe it in your notes instead.")
+    name = services().preview.keep(str(json_body().get("token") or ""), current_app.config["UPLOADS_DIR"])
+    return jsonify({"reference_image": name}), 201
+
+
 @bp.post("/orders")
 def create_order():
     body = json_body()
@@ -179,14 +188,6 @@ def product_recommendations(code: str):
     return jsonify(services().recommendations.similar(
         current_tenant(), code, _visitor_id(request.args.get("visitor_id")), current_customer()))
 
-
-@bp.post("/recommendations/bag")
-def bag_recommendations():
-    """ "Complete the look": pieces that go with everything in the bag."""
-    body = json_body()
-    codes = [str(code) for code in body.get("codes") or []][:20]
-    return jsonify(services().recommendations.for_bag(
-        current_tenant(), codes, _visitor_id(body.get("visitor_id")), current_customer()))
 
 
 # --- StyleMate's own public page (selling to shop owners), not the shop's ---

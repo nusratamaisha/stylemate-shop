@@ -142,3 +142,27 @@ def test_previews_are_limited_per_visitor_per_day(app, client, maira):
     second = post_preview(client, wish="a gold border")
     assert second.status_code == 429
     assert len(maira.image_requests) == 1  # the second picture was never paid for
+
+
+def test_a_preview_can_be_sent_to_the_tailor_as_a_reference_picture(client, owner_client, maira):
+    token = post_preview(client, wish="a gold border at the hem").get_json()["keep_token"]
+
+    kept = client.post("/api/previews/keep", json={"token": token})
+    assert kept.status_code == 201
+    name = kept.get_json()["reference_image"]
+    assert maira.downloaded == ["https://images.test/preview-1.png"]  # fetched only when the customer asks
+
+    placed = client.post("/api/orders", json={
+        "customer": {"name": "A", "phone": "1", "address": "Dhaka", "delivery_area": "inside_dhaka"},
+        "items": [{"product_code": "SR-002", "colour": "Maroon", "measurements": {"bust": 38},
+                   "option_ids": [option_id("Fit", "Made to your measurements")], "reference_image": name}]})
+    item = placed.get_json()["items"][0]
+    picture = owner_client.get(f"/api/owner/custom-orders/{item['id']}/reference-picture")
+    assert picture.data == b"\x89PNG drawn picture"
+
+
+def test_only_a_picture_maira_drew_can_be_kept(client, maira):
+    # A made-up token can't make the server fetch an address of the visitor's choosing
+    response = client.post("/api/previews/keep", json={"token": "https://evil.test/a.png"})
+    assert response.status_code == 400
+    assert maira.downloaded == []

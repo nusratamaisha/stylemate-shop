@@ -13,14 +13,17 @@ and described by pricing.py, the same code that prices the order.
 from dataclasses import dataclass
 from pathlib import Path
 
+from itsdangerous import BadSignature, URLSafeTimedSerializer
+
 from ..clients import ReferenceImage
 from ..errors import UserInputError
 from ..models import Product, Tenant
 from . import pricing
 from .sizes import size_guide
-from .uploads import check_picture
+from .uploads import MAX_PREVIEW_BYTES, check_picture, save_picture
 
 MAX_WISH_LENGTH = 200
+KEEP_FOR_SECONDS = 2 * 60 * 60  # a preview can be sent to the tailor for 2 hours after it was drawn
 IMAGE_TYPES = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
 
 
@@ -30,15 +33,18 @@ class Preview:
     details: str  # the priced options shown in the picture, e.g. "Sleeves: Short sleeves"
     wish: str
     on_customer: bool
+    keep_token: str  # signed picture link: lets the customer send this picture to the tailor (keep())
 
     def to_dict(self) -> dict:
         return self.__dict__.copy()
 
 
 class PreviewService:
-    def __init__(self, maira, images_dir: str):
-        self._maira = maira  # anything with a generate_image() method: the real client or a test fake
+    def __init__(self, maira, images_dir: str, secret_key: str):
+        self._maira = maira  # anything with generate_image() and download_image(): the real client or a test fake
         self._images_dir = Path(images_dir)
+        # Signing the link means keep() only ever fetches pictures Maira drew for us, never any address sent in
+        self._signer = URLSafeTimedSerializer(secret_key, salt="preview-keep")
 
     def create(self, tenant: Tenant, product: Product, *, visitor_id: str, colour: str = "",
                option_ids: list | None = None, wish: str = "", size: str = "", measurements=None,
@@ -75,7 +81,20 @@ class PreviewService:
             profile_id=tenant.maira_image_profile_id,
             reference_images=references,
         )
-        return Preview(image_url=image.url, details=quote.details, wish=wish, on_customer=photo is not None)
+        return Preview(image_url=image.url, details=quote.details, wish=wish, on_customer=photo is not None,
+                       keep_token=self._signer.dumps(image.url))
+
+    def keep(self, token: str, uploads_dir: str) -> str:
+        """Save a drawn preview as a reference picture for the tailor. Returns its name for the order.
+
+        Only on the customer's request: a try-on preview shows their face, so it isn't kept otherwise.
+        """
+        try:
+            url = self._signer.loads(token or "", max_age=KEEP_FOR_SECONDS)
+        except BadSignature:  # also covers an expired token
+            raise UserInputError("This preview can't be sent any more. Please draw it again.") from None
+        image = self._maira.download_image(url)
+        return save_picture(uploads_dir, image.mimetype, image.content, MAX_PREVIEW_BYTES)
 
     def _product_photo(self, product: Product) -> ReferenceImage | None:
         """The shop's real photo of the dress, if one has been added, to keep the picture true to it."""

@@ -3,7 +3,7 @@
 They have the same methods as the real clients, so the app can't tell the difference.
 """
 
-from stylemate.clients.maira import GeneratedImage, MairaAnswer, Reference
+from stylemate.clients.maira import GeneratedImage, MairaAnswer, Reference, ReferenceImage
 from stylemate.errors import ServiceUnavailableError
 
 
@@ -16,6 +16,7 @@ class FakeMaira:
         self.uploads: list[tuple] = []
         self.trained: list[str] = []
         self.image_requests: list[dict] = []
+        self.downloaded: list[str] = []
         self.created_datasets: list[dict] = []
 
     def ask(self, *, user_id, query, profile_id, session_id=None):
@@ -34,6 +35,12 @@ class FakeMaira:
         self.image_requests.append({"user_id": user_id, "prompt": prompt, "profile_id": profile_id,
                                     "reference_images": list(reference_images or [])})
         return GeneratedImage(url="https://images.test/preview-1.png", conversation_id="conversation-2")
+
+    def download_image(self, url):
+        if self.fail:
+            raise ServiceUnavailableError("Maira is down")
+        self.downloaded.append(url)
+        return ReferenceImage("preview-1.png", b"\x89PNG drawn picture", "image/png")
 
     def get_dataset(self, dataset_id):
         return {"dataset_id": dataset_id, "tags": ["house_of_m"]}
@@ -58,14 +65,13 @@ class FakeMaira:
 
 
 class FakeRecommender:
-    """Gigalogy's recommender, without the network. `similar` / `cart` are the IDs it answers with."""
+    """Gigalogy's recommender, without the network. `similar` is the IDs it answers with."""
 
     def __init__(self):
         self.similar: list[str] = []
-        self.cart: list[str] = []
         self.fail = False
         self.calls: list[tuple] = []
-        self.indices = {}
+        self.indices = ["gpt_dataset", "gpt_profiles", "chorus"]  # a Maira project: no item index yet
         self.uploads: list[tuple] = []
 
     def _check(self):
@@ -74,11 +80,14 @@ class FakeRecommender:
 
     def get_indices(self):
         self._check()
-        return {"detail": self.indices}
+        return {"detail": {"response": list(self.indices)}}
+
+    def has_item_index(self):
+        return "items" in self.get_indices()["detail"]["response"]
 
     def create_indices(self):
         self.calls.append(("create_indices",))
-        self.indices = {"items": "created"}
+        self.indices.append("items")
         return {"detail": "ok"}
 
     def save_mapper(self, key_map):
@@ -98,11 +107,6 @@ class FakeRecommender:
         self._check()
         self.calls.append(("similar_items", user_id, item_id, member_id))
         return list(self.similar)
-
-    def cart_items(self, *, user_id, item_ids, member_id=None, size=10):
-        self._check()
-        self.calls.append(("cart_items", user_id, tuple(item_ids), member_id))
-        return list(self.cart)
 
 
 class FakeChorus:
