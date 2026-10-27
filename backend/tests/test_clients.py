@@ -2,6 +2,7 @@
 #(10 tests)
 import pytest
 import requests
+import json
 
 from stylemate.clients import ChorusClient, MairaClient, ReferenceImage
 from stylemate.errors import ServiceUnavailableError
@@ -54,10 +55,12 @@ def test_ask_sends_keys_and_parses_the_detail_wrapper():
     answer = client.ask(user_id="visitor-1", query="Wedding dress?", profile_id="profile-1")
 
     sent = http.requests[0]
-    assert sent["url"] == "https://maira.test/v1/maira/ask"
+    payload = json.loads(sent["files"]["payload"][1])  # iask: the JSON is a text part of a multipart form
+    assert sent["url"] == "https://maira.test/v1/maira/iask"
     assert sent["headers"] == {"project-key": "project-key-1", "api-key": "api-key-1"}
-    assert sent["json"]["gpt_profile_id"] == "profile-1"
-    assert "session_id" not in sent["json"]
+    assert payload["gpt_profile_id"] == "profile-1"
+    assert payload["conversation_type"] == "chat"  # iask's default "question" would forget follow-ups
+    assert "session_id" not in payload
     assert answer.text.startswith("The **Shefali")
     assert answer.session_id == "2f558e57"
     assert answer.top_score == 42.53  # converted from the string "42.53"
@@ -68,7 +71,8 @@ def test_ask_sends_session_id_for_follow_ups():
     http = FakeHttp(FakeResponse(200, MAIRA_RESPONSE))
     MairaClient("https://maira.test", "p", "a", http=http).ask(
         user_id="v", query="Does it come in XL?", profile_id="p1", session_id="2f558e57")
-    assert http.requests[0]["json"]["session_id"] == "2f558e57"
+    assert json.loads(http.requests[0]["files"]["payload"][1])["session_id"] == "2f558e57"
+
 
 
 def test_top_score_is_none_without_references():
@@ -158,6 +162,8 @@ def test_upload_and_train_waits_until_maira_has_read_the_file():
 
     calls = [(request["method"], request["url"].rsplit("/", 1)[-1]) for request in http.requests]
     assert calls == [("PUT", "file"), ("GET", "dataset-1"), ("GET", "dataset-1"), ("POST", "train")]
+    # The whole address, not just its end: a typo inside it (Oct 27) made every stock sync fail with a 502
+    assert http.requests[-1]["url"] == "https://maira.test/v1/gpt/datasets/dataset-1/train"
 
 
 def test_get_dataset_reads_the_tags():
@@ -215,3 +221,15 @@ def test_create_dataset_sends_the_tags_and_returns_the_new_id():
     assert (sent["method"], sent["url"]) == ("POST", "https://maira.test/v1/gpt/datasets")
     assert sent["json"]["idx_column_name"] == "help_id" and sent["json"]["tags"] == ["shop"]
     assert dataset_id == "d-77"
+
+
+def test_download_image_fetches_the_picture_without_our_keys():
+    response = FakeResponse(200)
+    response.content = b"\x89PNG"
+    response.headers = {"Content-Type": "image/png; charset=binary"}
+    http = FakeHttp(response)
+
+    image = MairaClient("https://maira.test", "p", "a", http=http).download_image("https://bucket.test/gen_1.png?sig=x")
+
+    assert image.content == b"\x89PNG" and image.mimetype == "image/png" and image.filename == "gen_1.png"
+    assert "headers" not in http.requests[0]  # the storage link is not Maira: keys stay with us

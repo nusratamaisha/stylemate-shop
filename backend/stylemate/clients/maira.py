@@ -1,10 +1,13 @@
 """Talks to Maira: asking questions, generating pictures, and uploading and training the dataset."""
 
 import base64
+import json
 import re
 import time
 from dataclasses import dataclass
 from typing import Callable
+
+import requests
 
 from ..errors import ServiceUnavailableError
 from .base import GigalogyClient
@@ -75,7 +78,9 @@ class MairaClient(GigalogyClient):
         }
         if session_id:
             body["session_id"] = session_id
-        data = self._request("POST", "/v1/maira/ask", json=body)
+        # iask (the improved ask) takes multipart/form-data: the JSON goes in a text part called "payload".
+        # files= makes it multipart; (None, text) means "a text field, not a file".
+        data = self._request("POST", "/v1/maira/iask", files={"payload": (None, json.dumps(body))})
         return parse_answer(data)
 
     def generate_image(self, *, user_id: str, prompt: str, profile_id: str,
@@ -96,6 +101,20 @@ class MairaClient(GigalogyClient):
                               for image in reference_images]
         data = self._request("POST", "/v1/maira/ask", json=body, timeout=IMAGE_TIMEOUT_SECONDS)
         return parse_generated_image(data)
+
+    def download_image(self, url: str) -> ReferenceImage:
+        """Fetch a picture Maira drew, from the storage link in its answer.
+
+        The link is not on Maira's server, so our keys are not sent with it.
+        """
+        try:
+            response = self._http.request("GET", url, timeout=self._timeout)
+        except requests.RequestException as exc:
+            raise ServiceUnavailableError(f"Could not fetch the picture: {exc}") from exc
+        if response.status_code >= 400:
+            raise ServiceUnavailableError(f"The picture link returned {response.status_code}")
+        mimetype = (response.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+        return ReferenceImage(url.split("?")[0].rsplit("/", 1)[-1] or "preview", response.content, mimetype)
 
     def get_dataset(self, dataset_id: str) -> dict:
         """A dataset's settings, including its "tags"."""

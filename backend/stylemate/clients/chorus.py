@@ -14,7 +14,7 @@ from .base import GigalogyClient
 class ChorusClient(GigalogyClient):
     service_name = "Chorus"
 
-    def __init__(self, *args, poll_interval: float = 1.0, max_wait: float = 20.0,
+    def __init__(self, *args, poll_interval: float = 0.3, max_wait: float = 20.0,
                  sleep: Callable[[float], None] = time.sleep,
                  clock: Callable[[], float] = time.monotonic, **kwargs):
         super().__init__(*args, **kwargs)
