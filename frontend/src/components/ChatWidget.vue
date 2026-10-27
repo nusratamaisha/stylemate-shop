@@ -9,7 +9,7 @@ import { useBag } from '../stores/bag.js'
 import { useChat } from '../stores/chat.js'
 import { useShop } from '../stores/shop.js'
 import { renderMarkdown } from '../utils/markdown.js'
-import { formatTaka } from '../utils/format.js'
+import { formatDate, formatTaka } from '../utils/format.js'
 import { canRecord, startRecording } from '../utils/wavRecorder.js'
 
 const MAX_RECORDING_SECONDS = 15
@@ -59,6 +59,11 @@ const statusText = computed(() => ({
   thinking: 'The stylist is thinking…',
   transcribing: 'Listening to your question…',
 }[chat.state.status] || ''))
+
+// Deleting can't be undone, so it asks first
+function deletePastChat(id) {
+  if (window.confirm('Delete this chat? It will be removed from your past chats.')) chat.deletePastChat(id)
+}
 
 function toggle() {
   chat.state.open = !chat.state.open
@@ -112,7 +117,7 @@ function cancelMic() {
 onBeforeUnmount(cancelMic)
 
 watch(
-  () => [chat.state.messages.length, chat.state.status],
+  () => [chat.state.messages.length, chat.state.status, chat.state.view], // also on coming back from the list
   () => nextTick(() => log.value?.scrollTo({ top: log.value.scrollHeight, behavior: 'smooth' })),
 )
 </script>
@@ -136,8 +141,37 @@ watch(
           <h2 class="panel-title">Ask our stylist</h2>
           <p class="panel-sub">Answers come only from this shop’s catalogue.</p>
         </div>
-        <button class="close" type="button" aria-label="Close chat" @click="toggle">×</button>
+        <div class="head-actions">
+          <template v-if="chat.state.view === 'chat'">
+            <button class="head-button" type="button" @click="chat.showPastChats()">Past chats</button>
+            <button v-if="chat.state.messages.length" class="head-button" type="button" :disabled="busy"
+              @click="chat.newChat()">New chat</button>
+          </template>
+          <button v-else class="head-button" type="button" @click="chat.backToChat()">← Back</button>
+          <!-- Only hides the panel: the chat goes on (checkout closes it too) -->
+          <button class="close" type="button" aria-label="Close chat" @click="toggle">×</button>
+        </div>
       </header>
+
+      <p v-if="chat.state.historyError" class="history-error" role="alert">{{ chat.state.historyError }}</p>
+
+      <!-- The list of past chats (stores/chat.js, utils/chatStorage.js) -->
+      <div v-if="chat.state.view === 'past'" class="log">
+        <p v-if="!chat.state.pastChats.length" class="notice">
+          No past chats yet. Press “New chat” and the chat you’re in will be kept here.
+        </p>
+        <p v-else class="notice">Open a chat to carry on where you left off. The chat you’re in now will be kept here.</p>
+        <div v-for="past in chat.state.pastChats" :key="past.id" class="past-chat">
+          <button type="button" class="past-open" :disabled="busy" @click="chat.openPastChat(past.id)">
+            <span class="past-title">{{ past.title }}</span>
+            <span class="past-date">{{ formatDate(past.ended_at) }}</span>
+          </button>
+          <button type="button" class="past-delete" :aria-label="`Delete the chat “${past.title}”`"
+            @click="deletePastChat(past.id)">Delete</button>
+        </div>
+      </div>
+
+      <template v-else>
 
       <div ref="log" class="log" aria-live="polite">
         <div v-if="!chat.state.messages.length" class="welcome">
@@ -168,7 +202,8 @@ watch(
               </button>
             </div>
             <ChatOrderCard v-else-if="message.draftId" :draft="chat.state.drafts[message.draftId]" :in-bag="message.inBag"
-              @checkout="(item) => goToCheckout(message, item)" @restart="chat.restartOrder(message.draftId)" />
+              @checkout="(item) => goToCheckout(message, item)" @restart="chat.restartOrder(message.draftId)"
+              @placed="(order) => chat.markPlaced(message.draftId, order)" />
             <div v-else-if="message.customize" class="order">
               <p class="order-summary">
                 <strong>{{ message.customize.product.name }}</strong>, made for you<br />
@@ -233,6 +268,7 @@ watch(
         </button>
         <button class="button small" type="submit" :disabled="busy || !draft.trim()">Send</button>
       </form>
+      </template>
     </section>
   </div>
 </template>
@@ -299,6 +335,25 @@ watch(
   margin: 2px 0 0;
   font-size: var(--step--1);
   color: #f2dfe1;
+}
+.head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.head-button {
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 999px;
+  background: none;
+  color: #fff;
+  font-size: var(--step--1);
+  padding: 2px 10px;
+  white-space: nowrap; /* "Past chats" on one line */
+  cursor: pointer;
+}
+.head-button:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 .close {
   border: 0;
@@ -423,6 +478,50 @@ watch(
   font-size: var(--step--1);
   color: var(--muted);
 }
+/* Past chats */
+.history-error {
+  margin: 0;
+  padding: 8px 16px;
+  font-size: var(--step--1);
+  color: var(--sindoor-deep);
+  background: var(--jamdani);
+}
+.past-chat {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--jamdani);
+}
+.past-chat:hover { border-color: var(--sindoor); }
+.past-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 0;
+  background: none;
+  color: var(--kohl);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.past-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.past-date { font-size: var(--step--1); color: var(--muted); }
+.past-delete {
+  border: 0;
+  border-left: 1px solid var(--line);
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--step--1);
+  padding: 0 12px;
+  cursor: pointer;
+}
+.past-delete:hover { color: var(--sindoor-deep); }
+
 .status {
   margin: 0;
   font-size: var(--step--1);

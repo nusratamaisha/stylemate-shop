@@ -13,10 +13,10 @@ import { formatTaka, readyDate } from '../utils/format.js'
 import { afterOrder } from '../utils/savedDetails.js'
 
 const props = defineProps({
-  draft: { type: Object, required: true }, // { order, size, colour, quantity, changes }
+  draft: { type: Object, required: true }, // { order, size, colour, quantity, changes, placed? }
   inBag: { type: Boolean, default: false },
 })
-const emit = defineEmits(['checkout', 'restart'])
+const emit = defineEmits(['checkout', 'restart', 'placed'])
 
 const product = computed(() => props.draft.order.product)
 const optionIds = computed(() => chosenOptionIds(props.draft))
@@ -51,7 +51,8 @@ const item = computed(() => ({
 }))
 
 const idPrefix = `chat-order-${useId()}` // one chat can hold several orders, so field ids must differ
-const step = ref('summary') // 'summary' -> 'details' -> 'done'
+// 'summary' -> 'details' -> 'done'. An order placed earlier (chat history) opens as done, so it isn't sent twice.
+const step = ref(props.draft.placed ? 'done' : 'summary')
 const customer = reactive({ name: '', phone: '', address: '', delivery_area: '' })
 const payment = reactive({ method: '', transaction_id: '' })
 const remember = ref(true)
@@ -76,6 +77,7 @@ async function confirmOrder() {
       },
     })
     step.value = 'done'
+    emit('placed', confirmation.value) // the chat history remembers it (stores/chat.js markPlaced)
     afterOrder(account, customer, payment, remember.value)
     refreshProducts() // the order lowered the stock
   } catch (err) {
@@ -116,6 +118,15 @@ async function confirmOrder() {
         <button type="button" class="text-button small" :disabled="placing" @click="step = 'summary'">Back</button>
       </div>
     </form>
+
+    <div v-else-if="!confirmation" class="done">
+      <p>
+        <strong>Order confirmed.</strong>
+        <template v-if="draft.placed.customer_order_number">Your order {{ draft.placed.customer_order_number }} (ref #{{ draft.placed.order_id }})</template>
+        <template v-else>Order ref #{{ draft.placed.order_id }}</template>
+        · total {{ formatTaka(draft.placed.total_bdt) }}.
+      </p>
+    </div>
 
     <div v-else class="done" role="status">
       <p>
