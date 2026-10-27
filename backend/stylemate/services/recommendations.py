@@ -1,16 +1,16 @@
-"""Recommendations: "You may also like" on a product page and "Complete the look" in the bag.
+"""Recommendations: "You may also like" on a product page (POST /v1/items/recommend only).
 
-Gigalogy's recommender suggests pieces by content (clients/recommender.py). Flask then keeps
-only what this shop can really sell this customer, because the recommender knows neither our
-stock nor sizes:
-- a piece of this shop, not the one being viewed and not already in the bag;
+Only Gigalogy's recommender chooses the pieces (clients/recommender.py), by content. Flask then
+keeps only what this shop can really sell this customer, because the recommender knows neither
+our stock nor sizes:
+- a piece of this shop, not the one being viewed;
 - in stock, or customizable (it can be made to order);
 - in the customer's usual size, when they have one saved (a customizable piece can be made
   to their measurements, so it stays).
 
-Until `flask sync-recommender` has set the shop up (Tenant.recommender_ready), or if Gigalogy
-fails, the shop's own picks fill the list: pieces from the same section that share an
-occasion. The page never shows an empty box, and a failure never breaks it.
+Flask never picks pieces itself. Until `flask sync-recommender` has set the shop up
+(Tenant.recommender_ready), on a plan without smart suggestions, or if Gigalogy fails, the list
+is empty and the page simply shows no suggestion row. A failure never breaks the page.
 """
 
 import csv
@@ -40,18 +40,7 @@ class RecommendationService:
         product = get_product(tenant, code)
         ids = self._ask(tenant, ("item", product.code), lambda: self._recommender.similar_items(
             user_id=visitor_id, item_id=product.code, member_id=_member(customer)))
-        return self._pick(tenant, ids, exclude={product.code}, near=[product], customer=customer)
-
-    def for_bag(self, tenant: Tenant, codes: list[str], visitor_id: str, customer: Customer | None) -> dict:
-        """For the bag: pieces that go with everything in it."""
-        in_bag = [product for product in list_products(tenant) if product.code in set(codes)]
-        if not in_bag:
-            return {"products": [], "source": "shop"}
-        bag_codes = sorted(product.code for product in in_bag)
-        ids = self._ask(tenant, ("cart", *bag_codes), lambda: self._recommender.cart_items(
-            user_id=visitor_id, item_ids=bag_codes, member_id=_member(customer)))
-        return self._pick(tenant, ids, exclude=set(bag_codes), near=in_bag, customer=customer,
-                          other_sections=True)
+        return self._pick(tenant, ids, exclude={product.code}, customer=customer)
 
     def _ask(self, tenant: Tenant, key: tuple, call) -> list[str]:
         """Gigalogy's suggestions, cached; [] when it isn't set up, not in the shop's plan, or doesn't answer."""
@@ -63,14 +52,14 @@ class RecommendationService:
             return cached[1]
         try:
             ids = call()
-        except ServiceUnavailableError as problem:  # show the shop's own picks instead of an error
-            log.warning("Recommendations fell back to the shop's own picks: %s", problem)
+        except ServiceUnavailableError as problem:  # no suggestion row rather than an error
+            log.warning("No recommendations shown, Gigalogy didn't answer: %s", problem)
             return []
         self._cache[key] = (time.monotonic(), ids)
         return ids
 
-    def _pick(self, tenant: Tenant, ids: list[str], *, exclude: set[str], near: list[Product],
-              customer: Customer | None, other_sections: bool = False) -> dict:
+    def _pick(self, tenant: Tenant, ids: list[str], *, exclude: set[str], customer: Customer | None) -> dict:
+        """Gigalogy's order, keeping only pieces this shop can sell this customer."""
         catalogue = {product.code: product for product in list_products(tenant)}
         size = customer.preferred_size if customer else ""
 
@@ -80,27 +69,7 @@ class RecommendationService:
                     and (not size or size in product.size_list or product.customizable))
 
         chosen = [catalogue[code] for code in ids if code in catalogue and sellable(catalogue[code])][:SHOWN]
-        from_gigalogy = len(chosen)
-        # Fill up with the shop's own picks, closest first
-        others = sorted((product for product in catalogue.values() if sellable(product) and product not in chosen),
-                        key=lambda product: _closeness(product, near, other_sections))
-        chosen += others[:SHOWN - len(chosen)]
-        return {"products": [product.to_dict() for product in chosen],
-                "source": "gigalogy" if from_gigalogy else "shop"}
-
-
-def _closeness(product: Product, near: list[Product], other_sections: bool) -> tuple:
-    """Sort key for the shop's own picks: shared occasions first, then the section, then a similar price.
-
-    On a product page the same section comes first ("more dresses"); in the bag another section
-    does ("a skirt for this top"), because that completes the look.
-    """
-    occasions = {word.strip().lower() for item in near for word in item.occasion.split(",") if word.strip()}
-    shared = len(occasions & {word.strip().lower() for word in product.occasion.split(",") if word.strip()})
-    sections = {item.category for item in near}
-    section_rank = (product.category in sections) if other_sections else (product.category not in sections)
-    price = sum(item.price_bdt for item in near) / len(near)
-    return (section_rank, -shared, abs(product.price_bdt - price), product.code)
+        return {"products": [product.to_dict() for product in chosen]}
 
 
 def _member(customer: Customer | None) -> str | None:
@@ -130,15 +99,16 @@ def recommender_csv(tenant: Tenant) -> bytes:
 
 
 def set_up_recommender(tenant: Tenant, recommender, key_map: dict, report=print) -> int:
-    """Index, mapping, catalogue and training, then switch recommendations on. Safe to run again.
+    """Mapping, index, catalogue and training, then switch recommendations on. Safe to run again.
 
-    Returns the number of products sent. A failing step raises, and the shop stays on its own picks.
+    Returns the number of products sent. A failing step raises, and suggestions stay off.
+    The mapping comes first: creating the index without one returns 404 "Mapper Not found" (Oct 19).
     """
-    if not recommender.get_indices().get("detail"):
-        report("Creating the item index…")
-        recommender.create_indices()
     report("Saving the column mapping…")
     recommender.save_mapper(key_map)
+    if not recommender.has_item_index():
+        report("Creating the item index…")
+        recommender.create_indices()
     count = len(list_products(tenant))
     report(f"Uploading {count} products…")
     recommender.upload_items("products.csv", recommender_csv(tenant))

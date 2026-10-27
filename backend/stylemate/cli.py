@@ -77,9 +77,8 @@ DEFAULT_OPTIONS = [
     ("Sleeves", "Short sleeves", -100, 2, 0, False),
     ("Sleeves", "Full sleeves", 200, 2, 0, False),
     ("Sleeves", "Sleeveless", -150, 1, 0, False),
-    ("Length", "Shorter by 2 inches", -100, 1, -2, False),
-    ("Length", "Longer by 2 inches", 250, 2, 2, False),
-    ("Lining", "Add full cotton lining", 300, 2, 0, False),
+    ("Length", "Shorter by 2 inches or more", -100, 1, -2, False),
+    ("Length", "Longer by 2 inches or more", 250, 2, 2, False),
     ("Fit", "Made to your measurements", 0, 3, 0, True),  # free since Oct 15: sleeves and length are charged from the numbers
 ]
 
@@ -128,10 +127,10 @@ def sync_help() -> None:
 
 @click.command("sync-recommender")
 def sync_recommender() -> None:
-    """Set up Gigalogy's recommender for "You may also like" and "Complete the look".
+    """Set up Gigalogy's recommender for "You may also like".
 
     Creates the item index (first time only), maps our columns, uploads the catalogue and trains.
-    Run it again after the catalogue changes. Until it has run, the shop shows its own picks.
+    Run it again after the catalogue changes. Until it has run, no suggestions are shown.
     """
     tenant = db.session.scalar(db.select(Tenant).where(Tenant.slug == current_app.config["SHOP_SLUG"]))
     if tenant is None:
@@ -140,8 +139,8 @@ def sync_recommender() -> None:
     try:
         count = set_up_recommender(tenant, services.recommender, KEY_MAP, report=click.echo)
     except (UserInputError, ServiceUnavailableError) as exc:
-        raise click.ClickException(f"{exc}\nNothing was switched on: the shop keeps showing its own picks.") from exc
-    click.echo(f"Done: {count} products sent and trained. Product pages and the bag now ask Gigalogy.")
+        raise click.ClickException(f"{exc}\nNothing was switched on: no suggestions are shown yet.") from exc
+    click.echo(f"Done: {count} products sent and trained. Product pages now ask Gigalogy for 'You may also like'.")
 
 
 @click.command("set-plan")

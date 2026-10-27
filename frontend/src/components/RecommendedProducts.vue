@@ -1,7 +1,6 @@
 <script setup>
-// A row of suggested pieces: "You may also like" on a product page (productCode), or
-// "Complete the look" in the bag (bagCodes). Flask asks Gigalogy's recommender and keeps only
-// pieces this customer can buy (services/recommendations.py); nothing shows if there are none.
+// "You may also like" on a product page: pieces like productCode. Flask asks Gigalogy's
+// recommender and keeps only pieces this customer can buy (services/recommendations.py); nothing shows if there are none.
 import { computed, ref, watch } from 'vue'
 import { api } from '../api.js'
 import ProductCard from './ProductCard.vue'
@@ -10,19 +9,16 @@ import { visitorId } from '../utils/visitor.js'
 
 const props = defineProps({
   title: { type: String, required: true },
-  productCode: { type: String, default: '' },
-  bagCodes: { type: Array, default: null },
+  productCode: { type: String, required: true },
 })
 const account = useAccount()
 const products = ref([])
 
-// Ask again when the piece or the bag changes, and on log in or out (a usual size changes the picks)
-const ask = computed(() => [props.productCode, (props.bagCodes || []).join(','), account.state.customer?.preferred_size])
+// Ask again when the piece changes, and on log in or out (a usual size changes the picks)
+const ask = computed(() => [props.productCode, account.state.customer?.preferred_size])
 watch(ask, async () => {
   try {
-    const result = props.bagCodes
-      ? await api('/recommendations/bag', { method: 'POST', body: { codes: props.bagCodes, visitor_id: visitorId() } })
-      : await api(`/products/${encodeURIComponent(props.productCode)}/recommendations?visitor_id=${encodeURIComponent(visitorId())}`)
+    const result = await api(`/products/${encodeURIComponent(props.productCode)}/recommendations?visitor_id=${encodeURIComponent(visitorId())}`)
     products.value = result.products
   } catch {
     products.value = [] // a suggestion row is a bonus: never show an error for it
