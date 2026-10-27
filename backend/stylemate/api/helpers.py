@@ -45,7 +45,6 @@ def current_tenant() -> Tenant:
 
 def sender_key() -> str:
     """Recognises a visitor for daily limits without storing their IP address.
-
     Behind a proxy (nginx in Docker), request.remote_addr is the visitor's address only
     when PROXY_COUNT is set: create_app() then reads it from X-Forwarded-For.
     """
@@ -64,7 +63,6 @@ def error(message: str, status: int):
 
 def current_customer() -> Customer | None:
     """The logged-in customer of this shop, or None for a guest.
-
     Customers and owners use different session keys ("customer_id" and "user_id"),
     so one kind of login never counts as the other.
     """
