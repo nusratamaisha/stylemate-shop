@@ -31,20 +31,20 @@ class Plan:
     chat_questions: int  # per month, typed or spoken
     voice: bool
     previews: int  # picture previews per month; 0 = not included
-    smart_recommendations: bool  # Gigalogy's recommender; without it, the shop's own picks
+    smart_recommendations: bool  # Gigalogy's recommender; without it, no suggestions
     products: int  # 0 = unlimited
     pitch: str
 
 
 PLANS = {
     plan.key: plan for plan in [
-        Plan("starter", "Starter", 1500, chat_questions=500, voice=False, previews=0,
+        Plan("starter", "Starter", 1500, chat_questions=500, voice=False, previews=50,
              smart_recommendations=False, products=50,
              pitch="For a shop starting out: answers customers day and night."),
-        Plan("growth", "Growth", 4000, chat_questions=2000, voice=True, previews=100,
+        Plan("growth", "Growth", 4000, chat_questions=2000, voice=True, previews=200,
              smart_recommendations=True, products=200,
              pitch="For a busy page: voice questions, previews and smart suggestions."),
-        Plan("pro", "Pro", 9000, chat_questions=6000, voice=True, previews=400,
+        Plan("pro", "Pro", 9000, chat_questions=6000, voice=True, previews=600,
              smart_recommendations=True, products=0,
              pitch="For a large catalogue with many customers."),
     ]

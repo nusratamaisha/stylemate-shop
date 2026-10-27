@@ -38,14 +38,14 @@ def test_a_question_maira_fails_to_answer_is_not_counted(client, tenant, maira):
 
 def test_starter_has_no_voice_and_chorus_is_not_paid_to_listen(client, tenant, chorus):
     put_on(tenant, "starter")
-    assert client.get("/api/shop").get_json()["features"] == {"voice": False, "previews": False}
+    assert client.get("/api/shop").get_json()["features"] == {"voice": False, "previews": True}
     response = client.post("/api/voice", data={"audio": (io.BytesIO(b"RIFF"), "q.wav", "audio/wav")})
     assert response.status_code == 400 and "type your question" in response.get_json()["error"]
 
 
 def test_previews_are_hidden_when_the_plan_has_none_left(client, tenant):
     tenant.maira_image_profile_id = "image-profile"
-    put_on(tenant, "growth", preview=110)  # 100 + 10% grace, all used
+    put_on(tenant, "growth", preview=220)  # 200 + 10% grace, all used
     assert client.get("/api/products/SR-002").get_json()["preview_available"] is False
     put_on(tenant, "pro")
     assert client.get("/api/products/SR-002").get_json()["preview_available"] is True
@@ -72,7 +72,8 @@ def test_starter_shows_the_shops_own_picks_without_asking_gigalogy(client, tenan
 def test_the_owner_is_warned_from_80_percent(owner_client, tenant):
     put_on(tenant, "starter", chat=400)
     meters = owner_client.get("/api/owner/usage").get_json()["meters"]
-    assert meters == [{"kind": "chat", "used": 400, "limit": 500, "warn": True, "over": False}]
+    assert meters == [{"kind": "chat", "used": 400, "limit": 500, "warn": True, "over": False},
+                      {"kind": "preview", "used": 0, "limit": 50, "warn": False, "over": False}]
 
 
 def test_a_shop_owner_can_request_a_demo_and_stylemate_lists_it(app, client):
