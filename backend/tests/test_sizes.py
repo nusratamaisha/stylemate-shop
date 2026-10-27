@@ -28,4 +28,4 @@ def test_sleeve_options_say_how_long_the_sleeve_is(client):
     lengths = {item["label"]: item["sleeve_length_inches"] for item in groups["Sleeves"]["options"]}
 
     assert lengths == {"Short sleeves": 7, "Full sleeves": 23, "Sleeveless": None}  # no length for no sleeve
-    assert groups["Lining"]["options"][0]["sleeve_length_inches"] is None
+    assert groups["Length"]["options"][0]["sleeve_length_inches"] is None

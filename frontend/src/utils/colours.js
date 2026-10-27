@@ -36,7 +36,11 @@ const SWATCHES = {
 }
 
 export function swatch(colourName) {
-  return SWATCHES[(colourName || '').trim().toLowerCase()] || '#cfc6c2'
+  const name = (colourName || '').trim().toLowerCase()
+  if (SWATCHES[name]) return SWATCHES[name]
+  // A name like "Orange Ombre" or "Deep Maroon": the longest known colour inside it
+  const known = Object.keys(SWATCHES).filter((key) => name.includes(key)).sort((a, b) => b.length - a.length)[0]
+  return known ? SWATCHES[known] : '#cfc6c2'
 }
 
 // Light swatches need a visible edge on a white page.

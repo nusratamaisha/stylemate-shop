@@ -128,7 +128,7 @@ def test_the_chat_offers_changes_but_not_made_to_measure(client, maira):
     order = client.post("/api/chat", json={"message": "yes, order it"}).get_json()["order"]
 
     groups = {group["group"]: [option["label"] for option in group["options"]] for group in order["changes"]}
-    assert "Shorter by 2 inches" in groups["Length"]
+    assert "Shorter by 2 inches or more" in groups["Length"]
     assert "Fit" not in groups  # made to measure needs measurement boxes, so it stays on the product page
 
 

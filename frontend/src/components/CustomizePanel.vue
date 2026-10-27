@@ -24,13 +24,27 @@ function useSavedMeasurements() {
   for (const { key } of MEASUREMENTS) measurements[key] = savedMeasurements.value[key] ?? ''
 }
 
-// Only the bust is needed for every piece; the server checks the same ranges (pricing.MEASUREMENTS)
+// Same ranges as the server (pricing.MEASUREMENTS); the server checks them again
 const MEASUREMENTS = [
   { key: 'bust', label: 'Bust', required: true, min: 20, max: 72 },
   { key: 'waist', label: 'Waist', required: false, min: 20, max: 72 },
-  { key: 'sleeve_length', label: 'Sleeve length', required: false, min: 4, max: 30 },
-  { key: 'length', label: 'Length', required: false, min: 20, max: 72 },
+  { key: 'sleeve_length', label: 'Sleeve length', required: false, min: 0, max: 25 },
+  { key: 'length', label: 'Length', required: false, min: 20, max: 58 },
 ]
+
+// A number box still lets you type "-", "+" and "e" (as in 1e5); measurements never need them
+function blockSigns(event) {
+  if (['-', '+', 'e', 'E'].includes(event.key)) event.preventDefault()
+}
+
+// The message under a box when its number is outside the range, so the customer knows why
+function rangeError(item) {
+  const value = measurements[item.key]
+  if (value === '' || value === null) return ''
+  const inches = Number(value)
+  return inches < item.min || inches > item.max ? `Between ${item.min} and ${item.max} inches` : ''
+}
+
 
 const measurements = reactive({ bust: '', waist: '', sleeve_length: '', length: '' })
 // A change the stylist chat handed over that no number can say, such as "Sleeveless" (see applyFromAddress)
@@ -72,7 +86,7 @@ const standardSize = computed(() => {
   // "Fits" means every measurement given is within 2 inches of the size, not just smaller than it
   const close = fits.bust_inches - bust <= 2 && (!waist || fits.waist_inches - waist <= 2)
   // A changed length or sleeve length can only be sewn to order
-  const sameLength = (!length || length === props.product.length_inches) && !sleeve
+  const sameLength = (!length || length === props.product.length_inches) && sleeve === undefined  // 0 = sleeveless
   return { size: fits.size, close, sameLength }
 })
 
@@ -140,8 +154,21 @@ async function choosePicture(event) {
 }
 
 function removePicture() {
-  if (picture.value) URL.revokeObjectURL(picture.value.previewUrl)
+  if (picture.value?.previewUrl.startsWith('blob:')) URL.revokeObjectURL(picture.value.previewUrl)
   picture.value = null
+}
+
+// A "See it first" picture the customer sent to the tailor (already saved by Flask, see PreviewPanel)
+function usePicture({ name, previewUrl }) {
+  removePicture()
+  picture.value = { name, filename: 'Your “See it first” picture', previewUrl }
+  pictureError.value = ''
+}
+defineExpose({ usePicture })
+
+// The price box names only what changes for sleeves and length; the order keeps the full wording for the tailor
+function priceLabel(extra) {
+  return ['Sleeves', 'Length'].includes(extra.group) ? `${extra.group}:` : extra.description || extra.label
 }
 
 function useStandardSize(size) {
@@ -167,7 +194,7 @@ applyFromAddress()
   <section class="customize" aria-labelledby="customize-title">
     <h2 id="customize-title" class="title">Make it yours</h2>
     <p class="muted small">
-      Type your measurements and we sew it to fit you, at no extra charge. Longer sleeves or a longer length
+      Type your measurements and we sew it to fit you. Longer sleeves or a longer length
       cost a little more, shorter ones a little less: the price updates as you type.
     </p>
 
@@ -177,13 +204,15 @@ applyFromAddress()
         <button type="button" class="text-button" @click="useSavedMeasurements">Use my saved measurements</button>
       </p>
       <div class="measure-grid">
-        <div v-for="item in MEASUREMENTS" :key="item.key">
+        <div v-for="item in MEASUREMENTS" :key="item.key" class="measure">
           <label :for="`measure-${item.key}`">
-            {{ item.label }} <span v-if="!item.required" class="muted">(optional)</span>
+            {{ item.label }}
+            
           </label>
-          <input :id="`measure-${item.key}`" v-model="measurements[item.key]" type="number" inputmode="numeric"
-            :min="item.min" :max="item.max" step="1"
+            <input :id="`measure-${item.key}`" v-model="measurements[item.key]" type="number" inputmode="numeric"
+            :min="item.min" :max="item.max" step="1" @keydown="blockSigns"
             :placeholder="item.key === 'length' && product.length_inches ? String(product.length_inches) : ''" />
+          <span v-if="rangeError(item)" class="range-error" role="alert">{{ rangeError(item) }}</span>
         </div>
       </div>
       <p class="muted small hint">
@@ -220,7 +249,7 @@ applyFromAddress()
         <input v-else id="custom-picture" ref="pictureInput" type="file" accept="image/jpeg,image/png,image/webp"
           :disabled="uploadingPicture" @change="choosePicture" />
         <p class="muted small hint">
-          {{ uploadingPicture ? 'Uploading…' : 'A photo or sketch of the neckline, sleeve or detail you want. Only the shop can see it.' }}
+          {{ uploadingPicture ? 'Uploading…' : 'A photo or sketch of the detail you want, or a picture from “See it first” below. Only the shop can see it.' }}
         </p>
         <p v-if="pictureError" class="message error" role="alert">{{ pictureError }}</p>
       </div>
@@ -236,7 +265,7 @@ applyFromAddress()
     <div v-else-if="quote" class="summary" aria-live="polite">
       <div class="line"><span>{{ product.name }}</span><span>{{ formatTaka(quote.base_price_bdt) }}</span></div>
       <div v-for="extra in quote.extras" :key="extra.id" class="line">
-        <span>{{ extra.description || extra.label }}</span><span>{{ extra.extra_price_bdt ? formatPriceChange(extra.extra_price_bdt) : 'Free' }}</span>
+        <span>{{ priceLabel(extra) }}</span><span>{{ extra.extra_price_bdt ? formatPriceChange(extra.extra_price_bdt) : 'Free' }}</span>
       </div>
       <div class="line total"><span>Total</span><span>{{ formatTaka(quote.total_bdt) }}</span></div>
       <p v-if="quote.is_custom" class="ready small">
@@ -248,7 +277,7 @@ applyFromAddress()
 
 <style scoped>
 .customize {
-  margin-top: 32px;
+  margin-top: 28px;
   padding: 24px;
   border-radius: var(--radius-large);
   background: var(--jamdani);
@@ -297,11 +326,36 @@ legend {
 }
 .measure-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
 }
-.measure-grid label {
+.measure {
+  display: grid;
+  grid-template-rows: auto auto;
+  gap: 4px;
+}
+.measure label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
   font-size: var(--step--1);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.measure input {
+  width: 100%;
+  margin: 0;
+  background: #fff;
+}
+.tag-note {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--muted);
+}
+.tag-note.needed {
+  color: var(--kohl);
 }
 .saved {
   margin: 0 0 8px;
@@ -316,9 +370,9 @@ legend {
   background: #e9f3ee;
   color: #1f4b38;
 }
-@media (max-width: 520px) {
+@media (max-width: 420px) {
   .measure-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
   }
 }
 .notes-warning {
@@ -330,6 +384,8 @@ legend {
 }
 .field {
   margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
 }
 .summary {
   margin-top: 8px;
@@ -350,4 +406,9 @@ legend {
   margin: 8px 0 0;
   color: var(--ok);
 }
+.range-error {
+  font-size: 0.75rem;
+  color: var(--danger);
+}
+
 </style>

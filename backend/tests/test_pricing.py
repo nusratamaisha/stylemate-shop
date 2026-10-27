@@ -69,7 +69,7 @@ def test_price_quote_rejects_unknown_options(client):
 def test_product_page_includes_customization_menu_only_when_customizable(client):
     customizable = client.get("/api/products/SR-002").get_json()
     regular = client.get("/api/products/SR-003").get_json()
-    assert [group["group"] for group in customizable["customization"]] == ["Sleeves", "Length", "Lining", "Fit"]
+    assert [group["group"] for group in customizable["customization"]] == ["Sleeves", "Length", "Fit"]
     assert regular["customization"] == []
 
 
@@ -102,7 +102,7 @@ def test_changes_that_use_less_fabric_lower_the_price(client):
     # SR-002 in the test catalogue: ৳4,200, full sleeves, 56 inches
     response = client.post("/api/price-quote", json={
         "product_code": "SR-002",
-        "option_ids": [option_id("Sleeves", "Sleeveless"), option_id("Length", "Shorter by 2 inches")],
+        "option_ids": [option_id("Sleeves", "Sleeveless"), option_id("Length", "Shorter by 2 inches or more")],
     })
     data = response.get_json()
     assert data["total_bdt"] == 4200 - 150 - 100

@@ -26,6 +26,7 @@ const custom = ref({ quote: null, optionIds: [], notes: '', referenceImage: '', 
 const added = ref(false)
 const sizeGuideDialog = ref(null)
 const sizeGuideOpened = ref(false) // load the guide only when someone asks for it
+const customizePanel = ref(null)
 
 async function load() {
   product.value = null
@@ -117,9 +118,12 @@ function askAbout() {
       <ProductImage :product="product" :colour="colour" class="image" />
 
       <div class="details">
-        <p class="crumbs small"><RouterLink to="/shop">The collection</RouterLink> / {{ product.category }}</p>
-        <h1 class="name">{{ product.name }}</h1>
-        <p class="price">{{ formatTaka(price) }}</p>
+        <header class="head">
+          <p class="crumbs small"><RouterLink to="/shop">The collection</RouterLink> / {{ product.category }}</p>
+          <h1 class="name">{{ product.name }}</h1>
+          <p class="price">{{ formatTaka(price) }}</p>
+        </header>
+
         <p class="description">{{ product.description }}</p>
 
         <dl class="facts">
@@ -129,55 +133,59 @@ function askAbout() {
           <div v-if="product.occasions.length"><dt>Wear it for</dt><dd>{{ product.occasions.join(', ') }}</dd></div>
         </dl>
 
-        <fieldset class="choice">
-          <legend>Colour: <span class="muted">{{ colour }}</span></legend>
-          <div class="colours">
-            <button
-              v-for="name in product.colours"
-              :key="name"
-              type="button"
-              class="colour"
-              :class="{ light: isLight(name) }"
-              :style="{ background: swatch(name) }"
-              :aria-pressed="colour === name"
-              :aria-label="name"
-              :title="name"
-              @click="colour = name"
-            ></button>
-          </div>
-        </fieldset>
+        <div class="choices">
+          <fieldset class="choice">
+            <legend>Colour: <span class="muted">{{ colour }}</span></legend>
+            <div class="colours">
+              <button
+                v-for="name in product.colours"
+                :key="name"
+                type="button"
+                class="colour"
+                :class="{ light: isLight(name) }"
+                :style="{ background: swatch(name) }"
+                :aria-pressed="colour === name"
+                :aria-label="name"
+                :title="name"
+                @click="colour = name"
+              ></button>
+            </div>
+          </fieldset>
 
-        <p v-if="madeToMeasure" class="measured-note">
-          <strong>Size:</strong> made to your measurements. No need to choose S, M or L.
-        </p>
-        <fieldset v-else class="choice">
-          <legend>
-            Size
-            <button type="button" class="text-button guide-link" @click="openSizeGuide">Size guide</button>
-          </legend>
-          <div class="pills">
-            <button
-              v-for="name in product.sizes"
-              :key="name"
-              type="button"
-              class="pill"
-              :aria-pressed="size === name"
-              @click="size = name"
-            >
-              {{ name }}
-            </button>
-          </div>
-          <p v-if="usualSize && size === usualSize" class="usual small">{{ usualSize }} is your usual size.</p>
-        </fieldset>
+          <p v-if="madeToMeasure" class="measured-note">
+            <strong>Size:</strong> made to your measurements. No need to choose S, M or L.
+          </p>
+          <fieldset v-else class="choice">
+            <legend>
+              Size
+              <button type="button" class="text-button guide-link" @click="openSizeGuide">Size guide</button>
+            </legend>
+            <div class="pills">
+              <button
+                v-for="name in product.sizes"
+                :key="name"
+                type="button"
+                class="pill"
+                :aria-pressed="size === name"
+                @click="size = name"
+              >
+                {{ name }}
+              </button>
+            </div>
+            <p v-if="usualSize && size === usualSize" class="usual small">{{ usualSize }} is your usual size.</p>
+          </fieldset>
 
-        <p class="stock" :class="{ out: !product.in_stock }">{{ stockText }}</p>
+          <p class="stock" :class="{ out: !product.in_stock }">{{ stockText }}</p>
+        </div>
 
-        <CustomizePanel v-if="product.customizable" :key="product.code + JSON.stringify($route.query)" :product="product" @change="custom = $event" @use-size="size = $event" />
+        <CustomizePanel v-if="product.customizable" ref="customizePanel" :key="product.code + JSON.stringify($route.query)"
+          :product="product" @change="custom = $event" @use-size="size = $event" />
         <PreviewPanel v-if="product.preview_available" :product="product" :colour="colour" :option-ids="custom.optionIds"
-          :size="size" :made-to-measure="madeToMeasure" :measurements="custom.measurements" />
+          :size="size" :made-to-measure="madeToMeasure" :measurements="custom.measurements"
+          @use-as-reference="customizePanel?.usePicture($event)" />
 
         <div class="buy">
-          <button type="button" class="button" :disabled="!canAdd" @click="addToBag">{{ buttonText }}</button>
+          <button type="button" class="button full" :disabled="!canAdd" @click="addToBag">{{ buttonText }}</button>
           <p v-if="added" class="message ok" role="status">Added to your bag. <RouterLink to="/bag">View bag</RouterLink></p>
           <button type="button" class="text-button" @click="askAbout">Ask the stylist about this piece</button>
         </div>
@@ -203,52 +211,78 @@ function askAbout() {
 </template>
 
 <style scoped>
+/* Photo a little narrower than the details, so the text and choices have room */
 .product {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
   gap: clamp(24px, 5vw, 64px);
-  padding-top: 40px;
+  padding-top: 32px;
   align-items: start;
 }
 .image {
   position: sticky;
   top: 92px;
+  width: 100%;
+  max-width: 460px;
+  justify-self: end;
+}
+.details {
+  max-width: 560px;
+}
+.head {
+  padding-bottom: 18px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--line);
 }
 .crumbs {
-  margin-bottom: 8px;
+  margin: 0 0 8px;
   color: var(--muted);
 }
 .name {
-  font-size: clamp(2rem, 4vw, 2.75rem);
-  margin-bottom: 4px;
+  font-size: clamp(1.75rem, 3.2vw, 2.4rem);
+  line-height: 1.15;
+  margin: 0 0 8px;
 }
 .price {
   font-size: var(--step-2);
   font-family: var(--font-display);
-  margin-bottom: 16px;
+  margin: 0;
 }
 .description {
-  font-size: 1.0625rem;
+  margin: 0 0 18px;
+  color: var(--muted);
 }
+/* Fabric, length, sleeves, occasions: a neat two-column table */
 .facts {
   display: grid;
-  gap: 4px;
   margin: 0 0 24px;
+  border-top: 1px solid var(--line);
 }
 .facts div {
-  display: flex;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
 }
 .facts dt {
   font-weight: 600;
+  font-size: var(--step--1);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 .facts dd {
   margin: 0;
 }
+.choices {
+  display: grid;
+  gap: 18px;
+}
 .choice {
   border: 0;
   padding: 0;
-  margin: 0 0 20px;
+  margin: 0;
 }
 legend {
   font-weight: 600;
@@ -256,6 +290,7 @@ legend {
   padding: 0;
 }
 .measured-note {
+  margin: 0;
   padding: 10px 14px;
   border-radius: var(--radius);
   background: var(--jamdani);
@@ -308,6 +343,7 @@ legend {
   box-shadow: 0 0 0 2px var(--kohl);
 }
 .stock {
+  margin: 0;
   font-weight: 500;
   color: var(--ok);
 }
@@ -317,8 +353,11 @@ legend {
 .buy {
   display: grid;
   gap: 12px;
-  justify-items: start;
-  margin-top: 28px;
+  justify-items: center;
+  margin-top: 24px;
+}
+.buy .button {
+  width: 100%;
 }
 @media (max-width: 800px) {
   .product {
@@ -327,6 +366,10 @@ legend {
   .image {
     position: static;
     max-width: 420px;
+    justify-self: center;
+  }
+  .details {
+    max-width: none;
   }
 }
 .usual {

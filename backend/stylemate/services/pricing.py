@@ -21,8 +21,8 @@ DELIVERY_AREAS = {"inside_dhaka": "Inside Dhaka", "outside_dhaka": "Outside Dhak
 MEASUREMENTS = {
     "bust": ("bust", 20, 72, True),
     "waist": ("waist", 20, 72, False),
-    "sleeve_length": ("sleeve length", 4, 30, False),
-    "length": ("length", 20, 72, False),
+    "sleeve_length": ("sleeve length", 0, 25, False),
+    "length": ("length", 20, 58, False),
 }
 REQUIRED_MEASUREMENTS = [name for name, (_, _, _, required) in MEASUREMENTS.items() if required]
 MADE_TO_MEASURE_SIZE = "Made to measure"  # stored where a ready-made piece has S, M or L
@@ -104,12 +104,12 @@ def new_length(product: Product, option: CustomizationOption) -> int | None:
 
 
 def _describe(product: Product, option: CustomizationOption, measurements: dict[str, int]) -> str:
-    # Worked out from the customer's numbers: say what it is cut to, not "by 2 inches"
+    # Worked out from the customer's numbers: name the change only; the exact inches are in "Measurements: ..."
     if option.length_change_inches and "length" in measurements:
         longer = "longer" if option.length_change_inches > 0 else "shorter"
-        return f"{option.group}: {longer} than shown, cut to {measurements['length']} in"
+        return f"{option.group}: {longer} than shown"
     if option.group == SLEEVE_GROUP and "sleeve_length" in measurements:
-        return f"{option.group}: {option.label}, cut to {measurements['sleeve_length']} in"
+        return f"{option.group}: {option.label}"
     length = new_length(product, option)
     return f"{option.group}: {option.label}" + (f" ({length} in)" if length else "")
 
@@ -150,7 +150,7 @@ def measured_options(tenant: Tenant, product: Product, numbers: dict[str, int]) 
     sleeve = numbers.get("sleeve_length")
     table = {**sleeve_lengths(tenant), "sleeveless": 0}
     now = table.get(sleeve_word(product.sleeve or ""))
-    if sleeve and now is not None and abs(sleeve - now) > 1:
+    if sleeve is not None and now is not None and abs(sleeve - now) > 1:
         side = [option for option in shop if option.group == SLEEVE_GROUP and not already_has(product, option)
                 and sleeve_word(option.label) in table and (table[sleeve_word(option.label)] - now) * (sleeve - now) > 0]
         chosen += sorted(side, key=lambda option: abs(table[sleeve_word(option.label)] - sleeve))[:1]
