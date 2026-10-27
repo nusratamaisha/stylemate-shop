@@ -25,7 +25,7 @@ def test_sign_up_logs_the_customer_in(client):
 
 def test_sign_up_checks_the_details(client):
     assert "valid email" in sign_up(client, email="nadia").get_json()["error"]
-    assert "at least 8" in sign_up(client, password="short").get_json()["error"]
+    assert "at least 6" in sign_up(client, password="short").get_json()["error"]
     sign_up(client)
     assert "already exists" in sign_up(client).get_json()["error"]
 
@@ -41,7 +41,7 @@ def test_log_out_and_log_in_again(client):
 
 def test_customer_login_does_not_open_the_owner_dashboard(client):
     sign_up(client)
-    assert client.get("/api/owner/insights").status_code == 401
+    assert client.get("/api/owner/business").status_code == 401
     assert client.get("/api/owner/messages").status_code == 401
 
 

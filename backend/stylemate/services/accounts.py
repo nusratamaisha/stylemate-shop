@@ -7,7 +7,7 @@ from ..extensions import db
 from ..models import Customer, Order, Tenant
 from .pricing import DELIVERY_AREAS, MADE_TO_MEASURE_SIZE, clean_measurements
 
-MIN_PASSWORD_LENGTH = 8
+MIN_PASSWORD_LENGTH = 6
 
 
 def register(tenant: Tenant, name, email, password, phone="") -> Customer:
@@ -39,7 +39,6 @@ def authenticate(tenant: Tenant, email, password) -> Customer | None:
 
 def remember_details(customer: Customer, order: Order, measured: dict[str, int] | None) -> None:
     """After an order the customer agreed to remember, keep what they typed for next time.
-
     Contact and delivery details fill in checkout; the size and measurements are what the
     product page and, later, recommendations start from. The transaction ID is never kept.
     The caller commits, so this is saved with the order or not at all.

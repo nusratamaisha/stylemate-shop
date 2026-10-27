@@ -115,8 +115,8 @@ watch(() => account.state.customer, (customer) => {
           <input id="account-phone" v-model="form.phone" type="tel" autocomplete="tel" maxlength="40" />
         </div>
         <div class="field">
-          <label for="account-password">Password<span v-if="mode === 'register'" class="muted"> (at least 8 characters)</span></label>
-          <input id="account-password" v-model="form.password" type="password" minlength="8" required
+          <label for="account-password">Password<span v-if="mode === 'register'" class="muted"> (at least 6 characters)</span></label>
+          <input id="account-password" v-model="form.password" type="password" minlength="6" required
             :autocomplete="mode === 'register' ? 'new-password' : 'current-password'" />
         </div>
 
