@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import BrandMark from './components/BrandMark.vue'
 import ChatWidget from './components/ChatWidget.vue'
+import ShopMenu from './components/ShopMenu.vue'
 import { useAccount } from './stores/account.js'
 import { useBag } from './stores/bag.js'
 import { useShop } from './stores/shop.js'
@@ -35,7 +36,7 @@ const firstName = computed(() => {
       </RouterLink>
       <!-- The store's pages in the middle; the customer's own things (account, bag) apart on the right. -->
       <nav v-if="!isOwnerPage" class="nav store" aria-label="Main">
-        <RouterLink to="/shop">Shop</RouterLink>
+        <ShopMenu />
         <RouterLink to="/size-guide">Size guide</RouterLink>
         <RouterLink to="/help">Help</RouterLink>
       </nav>
@@ -82,6 +83,8 @@ const firstName = computed(() => {
       <p v-if="!isOwnerPage" class="powered small muted">
         This shop’s website and AI stylist run on <RouterLink to="/stylemate">StyleMate</RouterLink>.
         Sell on Facebook? <RouterLink to="/stylemate">Get one for your shop</RouterLink>.
+        <!-- /owner sends a logged-out owner to /owner/login, and a logged-in one straight to the dashboard -->
+        Run this shop? <RouterLink to="/owner">Owner log in</RouterLink>.
       </p>
     </div>
   </footer>

@@ -26,7 +26,7 @@ const FEATURES = [
   ['See it before you buy', 'A picture preview of the piece with the customer’s changes, or on their own photo in the size they chose.'],
   ['Pay the way Bangladesh pays', 'Cash on delivery, or bKash, Nagad and Rocket with a transaction ID you check. No gateway fees.'],
   ['Know what customers want', 'Your dashboard shows every order and every question, including the ones your shop couldn’t answer, so you know what to stock next.'],
-  ['Suggestions that fit', '“You may also like” and “Complete the look”, only with pieces in stock and in the customer’s size.'],
+  ['Suggestions that fit', '“You may also like” on product pages, only with pieces in stock and in the customer’s size.'],
 ]
 
 const form = reactive({ shop_name: '', owner_name: '', phone: '', facebook_page: '', product_count: '', plan: '', message: '' })
@@ -57,7 +57,7 @@ const planLines = (plan) => [
   `${plan.chat_questions.toLocaleString('en-IN')} AI chat questions a month`,
   plan.voice ? 'Voice questions' : null,
   plan.previews ? `${plan.previews.toLocaleString('en-IN')} picture previews a month` : null,
-  plan.smart_recommendations ? 'Smart suggestions (Gigalogy)' : 'Suggestions from your own catalogue',
+  plan.smart_recommendations ? 'Smart suggestions (Gigalogy)' : null,
   plan.products ? `Up to ${plan.products} products` : 'Unlimited products',
 ].filter(Boolean)
 const POPULAR = 'growth' // the plan marked "Most shops choose this"
@@ -72,6 +72,7 @@ const POPULAR = 'growth' // the plan marked "Most shops choose this"
           <a href="#how">How it works</a>
           <a href="#pricing">Pricing</a>
           <RouterLink to="/">See a live shop</RouterLink>
+          <RouterLink to="/owner">Owner log in</RouterLink>
         </nav>
         <a href="#demo" class="cta small-cta">Request a demo</a>
       </div>
@@ -195,7 +196,8 @@ const POPULAR = 'growth' // the plan marked "Most shops choose this"
     <footer class="foot">
       <div class="wrap">
         <p><strong>StyleMate</strong>: AI shop websites for clothing sellers in Bangladesh. AI answers by Gigalogy’s Maira.</p>
-        <p class="muted"><RouterLink to="/">Closet Corner</RouterLink> is a demo shop with sample data.</p>
+        <p class="muted"><RouterLink to="/">Closet Corner</RouterLink> is a demo shop with sample data.
+          Already a StyleMate shop? <RouterLink to="/owner">Owner log in</RouterLink>.</p>
       </div>
     </footer>
   </div>
