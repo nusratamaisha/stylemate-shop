@@ -88,3 +88,4 @@ def test_payment_status_needs_the_owner_of_that_shop(app, client):
 
     assert client.patch(f"/api/owner/orders/{theirs.id}/payment", json={"status": "paid"}).status_code == 400
     assert theirs.payment_status == "unpaid"
+

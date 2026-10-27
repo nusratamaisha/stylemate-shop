@@ -23,6 +23,7 @@ def split_list(value: str) -> list[str]:
     return [part.strip() for part in value.split(",") if part.strip()]
 
 
+#The Shop
 class Tenant(db.Model):
     """A shop using StyleMate, with the Maira IDs that keep its data separate."""
 
@@ -34,7 +35,7 @@ class Tenant(db.Model):
     maira_dataset_id: Mapped[str] = mapped_column(String(64), default="")
     maira_help_dataset_id: Mapped[str] = mapped_column(String(64), default="")  # FAQ and size guide; made by `flask sync-help`
     maira_image_profile_id: Mapped[str] = mapped_column(String(64), default="")  # empty: no image preview
-    recommender_ready: Mapped[bool] = mapped_column(default=False)  # set by `flask sync-recommender`; off: the shop's own picks
+    recommender_ready: Mapped[bool] = mapped_column(default=False)  # set by `flask sync-recommender`; off: no suggestions
     plan: Mapped[str] = mapped_column(String(20), default="growth")  # a key of services/plans.PLANS; `flask set-plan`
     custom_base_days: Mapped[int] = mapped_column(default=7)
     shipping_inside_dhaka_bdt: Mapped[int] = mapped_column(default=80)
@@ -50,6 +51,7 @@ class Tenant(db.Model):
     rocket_number: Mapped[str] = mapped_column(String(20), default="")
 
 
+#Owners (dashboard login) and shoppers (accounts)
 class User(db.Model):
     """A shop owner who can log in to the dashboard."""
 
@@ -99,6 +101,7 @@ class Customer(db.Model):
                 "preferred_size": self.preferred_size, "measurements": json.loads(self.measurements or "{}")}
 
 
+#What the shop sells and its rules
 class Product(db.Model):
     """One product, with the same columns as the CSV uploaded to Maira."""
 
@@ -129,11 +132,16 @@ class Product(db.Model):
     def colour_list(self) -> list[str]:
         return split_list(self.colours)
 
+    @property
+    def image_url(self) -> str | None:
+        """Where the browser loads the photo, or None before one is added. Used by products and order lines."""
+        return f"/api/images/{self.image}" if self.image else None
+
     def to_dict(self) -> dict:
         return {
             "code": self.code,
             "name": self.name,
-            "image_url": f"/api/images/{self.image}" if self.image else None,
+            "image_url": self.image_url,
             "category": self.category,
             "occasions": split_list(self.occasion),
             "sizes": self.size_list,
@@ -221,6 +229,7 @@ class FaqItem(db.Model):
         return {"id": self.id, "question": self.question, "answer": self.answer}
 
 
+#What customers did
 class ContactMessage(db.Model):
     """A message a customer sent from the Help page. The owner reads these in the dashboard."""
 
@@ -236,45 +245,6 @@ class ContactMessage(db.Model):
         return {"id": self.id, "name": self.name, "contact": self.contact, "message": self.message,
                 "has_picture": bool(self.picture), "sent_at": self.created_at.isoformat()}
 
-
-class RateLimitEvent(db.Model):
-    """One use of a limited action (a contact message, a picture preview) by one sender."""
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenant.id"))
-    action: Mapped[str] = mapped_column(String(40))
-    sender_key: Mapped[str] = mapped_column(String(64), index=True)  # a hash of the IP address, never the address
-    created_at: Mapped[datetime] = mapped_column(default=utc_now)
-
-
-class PlanUsage(db.Model):
-    """How much of its plan a shop used in one month, e.g. 312 chat questions in 2026-10 (services/plans.py)."""
-
-    __table_args__ = (UniqueConstraint("tenant_id", "kind", "month"),)
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenant.id"))
-    kind: Mapped[str] = mapped_column(String(20))  # "chat" or "preview"
-    month: Mapped[str] = mapped_column(String(7))  # "2026-10"
-    count: Mapped[int] = mapped_column(default=0)
-
-
-class DemoRequest(db.Model):
-    """A shop owner asking for a StyleMate demo from the public page.
-
-    StyleMate's own lead, not any shop's data, so it has no tenant_id (the one table
-    without one). Listed with `flask demo-requests`.
-    """
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    shop_name: Mapped[str] = mapped_column(String(120))
-    owner_name: Mapped[str] = mapped_column(String(120))
-    phone: Mapped[str] = mapped_column(String(40))
-    facebook_page: Mapped[str] = mapped_column(String(300), default="")
-    product_count: Mapped[str] = mapped_column(String(40), default="")
-    plan: Mapped[str] = mapped_column(String(20), default="")
-    message: Mapped[str] = mapped_column(Text, default="")
-    created_at: Mapped[datetime] = mapped_column(default=utc_now)
 
 
 class Review(db.Model):
@@ -306,6 +276,25 @@ class ChatTurn(db.Model):
     answered: Mapped[bool]
     via_voice: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(default=utc_now)
+
+
+class ChatConversation(db.Model):
+    """One of a customer's chats with the stylist, as their chat window showed it.
+
+    The open one (ended_at None) is the chat they are in now; "New chat" ends it and it joins
+    their list of past chats. Only that customer reads them (services/chat_history.py). No owner
+    route touches this table: the dashboard sees ChatTurn summaries, never conversations.
+    A guest's chats stay in their browser.
+    """
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenant.id"))
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customer.id"))
+    title: Mapped[str] = mapped_column(String(80))  # the customer's first message, for the list
+    content: Mapped[str] = mapped_column(Text)  # JSON: {"messages": [...], "drafts": {...}, "session_id": ...}
+    created_at: Mapped[datetime] = mapped_column(default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(default=utc_now, onupdate=utc_now)
+    ended_at: Mapped[datetime | None]  # None: the chat they are in now
 
 
 class Order(db.Model):
@@ -354,6 +343,9 @@ class OrderItem(db.Model):
     """One line of an order. Customized lines go into the owner's custom order queue."""
 
     STATUSES = ("new", "in_production", "shipped")
+    # Where a line can go next: a small state machine, kept as a table because there are only three states
+    # (the State pattern, a class per state, would be more code than this needs). Shipped is final.
+    NEXT_STATUSES = {"new": ("in_production", "shipped"), "in_production": ("shipped",), "shipped": ()}
 
     id: Mapped[int] = mapped_column(primary_key=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenant.id"))
@@ -373,12 +365,18 @@ class OrderItem(db.Model):
     order: Mapped[Order] = relationship(back_populates="items")
     product: Mapped[Product] = relationship()
 
+    def next_statuses(self) -> tuple[str, ...]:
+        # A ready-made piece is already made, so it goes straight from new to shipped
+        return tuple(status for status in self.NEXT_STATUSES.get(self.status, ())
+                     if status != "in_production" or self.is_custom)
+
     def to_dict(self) -> dict:
         return {
             "id": self.id,
             "order_id": self.order_id,
             "product_code": self.product.code,
             "product_name": self.product.name,
+            "product_image_url": self.product.image_url,  # a small photo in the owner's order lists
             "size": self.size,
             "colour": self.colour,
             "quantity": self.quantity,
@@ -389,8 +387,50 @@ class OrderItem(db.Model):
             "has_reference_image": bool(self.reference_image),
             "ready_by": self.ready_by.isoformat() if self.ready_by else None,
             "status": self.status,
+            "next_statuses": list(self.next_statuses()),  # the dashboard offers only these
             "customer_name": self.order.customer_name,
             "phone": self.order.phone,
             "ordered_at": self.order.created_at.isoformat(),
         }
 
+#Daily limits, monthly plan usage, StyleMate's own sales leads
+
+class DemoRequest(db.Model):
+    """A shop owner asking for a StyleMate demo from the public page.
+
+    StyleMate's own lead, not any shop's data, so it has no tenant_id (the one table
+    without one). Listed with `flask demo-requests`.
+    """
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    shop_name: Mapped[str] = mapped_column(String(120))
+    owner_name: Mapped[str] = mapped_column(String(120))
+    phone: Mapped[str] = mapped_column(String(40))
+    facebook_page: Mapped[str] = mapped_column(String(300), default="")
+    product_count: Mapped[str] = mapped_column(String(40), default="")
+    plan: Mapped[str] = mapped_column(String(20), default="")
+    message: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(default=utc_now)
+
+
+class RateLimitEvent(db.Model):
+    """One use of a limited action (a contact message, a picture preview) by one sender."""
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenant.id"))
+    action: Mapped[str] = mapped_column(String(40))
+    sender_key: Mapped[str] = mapped_column(String(64), index=True)  # a hash of the IP address, never the address
+    created_at: Mapped[datetime] = mapped_column(default=utc_now)
+
+
+
+class PlanUsage(db.Model):
+    """How much of its plan a shop used in one month, e.g. 312 chat questions in 2026-10 (services/plans.py)."""
+
+    __table_args__ = (UniqueConstraint("tenant_id", "kind", "month"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenant.id"))
+    kind: Mapped[str] = mapped_column(String(20))  # "chat" or "preview"
+    month: Mapped[str] = mapped_column(String(7))  # "2026-10"
+    count: Mapped[int] = mapped_column(default=0)

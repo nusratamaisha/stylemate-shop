@@ -41,10 +41,12 @@ def plan_usage():
     return jsonify(plans.usage_summary(g.tenant))
 
 
-@bp.get("/insights")
+@bp.get("/business")
 @owner_required
-def owner_insights():
-    return jsonify(insights.owner_insights(g.tenant))
+def business_insights():
+    """The Insights tab: restocking, best sellers, this month against last, and what the chat shows.
+    Only summaries: the chat conversations themselves are never sent to the owner."""
+    return jsonify(insights.business_insights(g.tenant))
 
 
 @bp.get("/orders")

@@ -38,7 +38,7 @@ def test_out_of_stock_items_cannot_be_ordered_ready_made(client):
 
 def test_out_of_stock_items_can_be_made_to_order(client):
     response = order(client, {"product_code": "SR-004", "size": "M", "colour": "Black",
-                              "option_ids": [option_id("Length", "Shorter by 2 inches")]})
+                              "option_ids": [option_id("Length", "Shorter by 2 inches or more")]})
     assert response.status_code == 201
 
 
@@ -94,7 +94,7 @@ def test_made_to_measure_needs_no_size(client):
     # No charge for made to measure. A 20 in sleeve on this full-sleeved (23 in) piece is nearest the short
     # sleeve (-100), replacing the Sleeveless sent along, and 36 in instead of 56 is shorter (-100)
     assert item["unit_price_bdt"] == 4200 - 100 - 100
-    assert item["custom_details"] == ("Sleeves: Short sleeves, cut to 20 in; Length: shorter than shown, cut to 36 in; "
+    assert item["custom_details"] == ("Sleeves: Short sleeves; Length: shorter than shown; "
                                       "Fit: Made to your measurements; "
                                       "Measurements: bust 38 in, waist 32 in, sleeve length 20 in, length 36 in")
 
@@ -107,7 +107,7 @@ def test_made_to_measure_needs_the_measurements(client):
     assert silly.status_code == 400 and "between 20 and 72" in silly.get_json()["error"]
     long_sleeve = client.post("/api/orders", json={"customer": CUSTOMER, "items": [
         measured(measurements={"bust": 38, "sleeve_length": 40})]})
-    assert long_sleeve.status_code == 400 and "sleeve length measurement should be between 4 and 30" in long_sleeve.get_json()["error"]
+    assert long_sleeve.status_code == 400 and "sleeve length measurement should be between 0 and 25" in long_sleeve.get_json()["error"]
 
 
 def test_made_to_measure_needs_only_the_bust(client):
@@ -118,7 +118,7 @@ def test_made_to_measure_needs_only_the_bust(client):
 
 def test_made_to_measure_replaces_the_length_options(client):
     response = client.post("/api/price-quote", json={"product_code": "SR-002", "option_ids": [
-        option_id("Fit", "Made to your measurements"), option_id("Length", "Shorter by 2 inches")]})
+        option_id("Fit", "Made to your measurements"), option_id("Length", "Shorter by 2 inches or more")]})
     assert response.status_code == 400 and "exact length" in response.get_json()["error"]
 
 
@@ -218,12 +218,26 @@ def test_a_longer_sleeve_length_adds_the_full_sleeve_charge(client):
     # SR-006 has short sleeves (7 in in the size guide); 21 in is nearest the full sleeve (23 in)
     data = quote(client, "SR-006", bust=36, sleeve_length=21)
     assert data["total_bdt"] == 1650 + 200
-    assert "Sleeves: Full sleeves, cut to 21 in" in data["details"]
+    assert "Sleeves: Full sleeves;" in data["details"]
 
 
 def test_a_longer_length_adds_the_longer_charge_and_a_close_one_changes_nothing(client):
     assert quote(client, "SR-006", bust=36, length=42)["total_bdt"] == 1650 + 250  # 38 in as shown
     assert quote(client, "SR-006", bust=36, length=39, sleeve_length=8)["total_bdt"] == 1650  # within an inch
+
+def test_measurements_must_be_within_the_standard_ranges(client):
+    for measurements, words in [({"bust": 36, "waist": 10}, "waist measurement should be between 20 and 72"),
+                                ({"bust": 36, "length": 60}, "length measurement should be between 20 and 58"),
+                                ({"bust": 36, "sleeve_length": -3}, "sleeve length measurement should be between 0 and 25")]:
+        response = client.post("/api/price-quote", json={"product_code": "SR-006", "measurements": measurements})
+        assert response.status_code == 400 and words in response.get_json()["error"]
+
+
+def test_a_sleeve_length_of_zero_makes_it_sleeveless(client):
+    # SR-006 has short sleeves; 0 in is sleeveless, which costs 150 less
+    data = quote(client, "SR-006", bust=36, sleeve_length=0)
+    assert data["total_bdt"] == 1650 - 150
+    assert "Sleeves: Sleeveless" in data["details"]
 
 
 def test_a_sleeve_chosen_in_the_chat_stays_when_no_sleeve_length_is_given(client):

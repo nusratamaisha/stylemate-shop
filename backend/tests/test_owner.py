@@ -6,7 +6,7 @@ from .conftest import OWNER_EMAIL, option_id
 
 
 def test_dashboard_needs_login(client):
-    assert client.get("/api/owner/insights").status_code == 401
+    assert client.get("/api/owner/business").status_code == 401
 
 
 def test_wrong_password_is_rejected(client):
@@ -14,26 +14,12 @@ def test_wrong_password_is_rejected(client):
     assert response.status_code == 401
 
 
-def test_insights_group_questions_and_list_unanswered(owner_client, maira):
-    for question in ["Do you sell shoes?", "do you sell shoes", "Do you sell SHOES!"]:
-        maira.top_score = 23.0
-        owner_client.post("/api/chat", json={"message": question})
-    maira.top_score = 42.0
-    owner_client.post("/api/chat", json={"message": "Wedding dress under 4500?"})
-
-    data = owner_client.get("/api/owner/insights").get_json()
-    assert data["total_questions"] == 4
-    assert data["unanswered_count"] == 3
-    assert data["answer_rate"] == 25
-    assert data["unanswered_questions"][0]["count"] == 3
-
-
 def test_custom_order_queue_and_status_update(owner_client):
     owner_client.post("/api/orders", json={
         "customer": {"name": "A", "phone": "1", "address": "Dhaka", "delivery_area": "inside_dhaka"},
         "items": [
             {"product_code": "SR-002", "size": "M", "colour": "Maroon",
-             "option_ids": [option_id("Lining", "Add full cotton lining")]},
+             "option_ids": [option_id("Sleeves", "Short sleeves")]},
             {"product_code": "SR-003", "size": "M", "colour": "Mustard"},  # regular: not in the queue
         ],
     })
@@ -51,6 +37,18 @@ CSV = (
     "SR-002,Shefali Embroidered Maxi,SR-002.jpg,Dress,Wedding guest,\"S, M, L\",Maroon,Georgette,3900,4,yes,On sale\n"
     "SR-011,Noor Silk Kaftan,SR-011.jpg,Dress,Festive,\"M, L\",Gold,Silk,5200,3,no,New arrival\n"
 )
+
+
+def test_ready_made_line_cannot_be_in_production(owner_client):
+    order = owner_client.post("/api/orders", json={
+        "customer": {"name": "A", "phone": "1", "address": "Dhaka", "delivery_area": "inside_dhaka"},
+        "items": [{"product_code": "SR-003", "size": "M", "colour": "Mustard"}],
+    }).get_json()
+    item_id = order["items"][0]["id"]
+
+    response = owner_client.patch(f"/api/owner/custom-orders/{item_id}", json={"status": "in_production"})
+    assert response.status_code == 400
+    assert owner_client.patch(f"/api/owner/custom-orders/{item_id}", json={"status": "shipped"}).status_code == 200
 
 
 def upload(client, content: str, filename="products.csv"):
@@ -107,7 +105,7 @@ def test_owner_sees_every_order_and_the_sales_numbers(owner_client):
     owner_client.post("/api/orders", json={"customer": DELIVERY, "items": [
         {"product_code": "SR-003", "size": "M", "colour": "Mustard", "quantity": 2},  # ready-made
         {"product_code": "SR-002", "size": "M", "colour": "Maroon",
-         "option_ids": [option_id("Length", "Longer by 2 inches")]},  # made to order
+         "option_ids": [option_id("Length", "Longer by 2 inches or more")]},  # made to order
     ]})
     owner_client.post("/api/orders", json={"customer": {**DELIVERY, "delivery_area": "inside_dhaka"}, "items": [
         {"product_code": "SR-003", "size": "S", "colour": "White"}]})
@@ -123,6 +121,7 @@ def test_owner_sees_every_order_and_the_sales_numbers(owner_client):
     newest, first = data["orders"]
     assert (first["customer_name"], first["address"], first["delivery_area"]) == ("Nadia", "House 4, Sylhet", "outside_dhaka")
     assert [line["is_custom"] for line in first["items"]] == [False, True]  # ready-made lines are listed too
+    assert first["items"][0]["product_image_url"] == "/api/images/SR-003.jpg"  # the owner sees which piece it is
     assert newest["total_bdt"] == 1850 + 80
 
 
@@ -161,3 +160,26 @@ def test_an_order_confirmed_in_the_chat_reaches_the_orders_tab_marked_as_chat(ow
     data = owner_client.get("/api/owner/orders").get_json()
     assert [order["source"] for order in data["orders"]] == ["website", "chat"]  # newest first
     assert (data["summary"]["order_count"], data["summary"]["chat_orders"]) == (2, 1)
+
+
+def test_an_order_line_only_moves_forward(owner_client):
+    order = owner_client.post("/api/orders", json={
+        "customer": {"name": "A", "phone": "1", "address": "Dhaka", "delivery_area": "inside_dhaka"},
+        "items": [{"product_code": "SR-002", "size": "M", "colour": "Maroon",
+                   "option_ids": [option_id("Sleeves", "Short sleeves")]},
+                  {"product_code": "SR-003", "size": "M", "colour": "Mustard"}],
+    }).get_json()
+    custom, ready_made = order["items"]
+    assert custom["next_statuses"] == ["in_production", "shipped"]
+    assert ready_made["next_statuses"] == ["shipped"]  # already made: no production step
+
+    def move(item, status):
+        return owner_client.patch(f"/api/owner/custom-orders/{item['id']}", json={"status": status})
+
+    assert move(custom, "in_production").get_json()["next_statuses"] == ["shipped"]
+    assert move(custom, "new").status_code == 400  # production has started
+    shipped = move(custom, "shipped").get_json()
+    assert (shipped["status"], shipped["next_statuses"]) == ("shipped", [])
+    response = move(custom, "in_production")
+    assert response.status_code == 400 and "can't go back" in response.get_json()["error"]  # a sent parcel can't come back
+    assert move(custom, "shipped").status_code == 200  # the same status again (a double click) changes nothing

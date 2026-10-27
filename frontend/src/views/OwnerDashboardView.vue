@@ -2,14 +2,14 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '../api.js'
+import ProductImage from '../components/ProductImage.vue'
 import { formatDate, formatTaka } from '../utils/format.js'
-import { plainText } from '../utils/markdown.js'
 
 const router = useRouter()
 const owner = ref(null)
 const tab = ref('sales')
 
-const insights = ref(null)
+const business = ref(null) // what to restock, what not to, best sellers, this month against last
 const orders = ref([])
 const sales = ref(null) // { summary, orders }: every order, ready-made and made to order
 const orderFilter = ref('')
@@ -25,6 +25,12 @@ const syncing = ref(false)
 const syncMessage = ref('')
 
 const STATUS_LABELS = { new: 'New', in_production: 'In production', shipped: 'Shipped' }
+// The line's status and the ones it may move to: Flask decides (OrderItem.NEXT_STATUSES), so a
+// shipped line offers nothing else, and a ready-made one skips "In production"
+function statusOptions(item) {
+  return Object.fromEntries([item.status, ...(item.next_statuses || [])].map((key) => [key, STATUS_LABELS[key]]))
+}
+
 const AREA_LABELS = { inside_dhaka: 'Inside Dhaka', outside_dhaka: 'Outside Dhaka' }
 const PAYMENT_LABELS = { unpaid: 'Not paid yet', to_check: 'Check this payment', paid: 'Paid' }
 
@@ -39,7 +45,7 @@ async function load(fn) {
 }
 
 const loaders = {
-  questions: async () => (insights.value = await api('/owner/insights')),
+  insights: async () => (business.value = await api('/owner/business')),
   sales: async () => (sales.value = await api('/owner/orders')),
   orders: async () => (orders.value = await api(`/owner/custom-orders${orderFilter.value ? `?status=${orderFilter.value}` : ''}`)),
   products: async () => (products.value = await api('/owner/products')),
@@ -52,6 +58,24 @@ const KIND_LABELS = { chat: 'AI chat questions', preview: 'picture previews' }
 const warnings = computed(() => (usage.value?.meters || []).filter((meter) => meter.warn))
 const left = (meter) => Math.max(0, meter.limit - meter.used)
 const number = (value) => value.toLocaleString('en-IN')
+
+// This month against last month, e.g. "↑ 25%"; nothing to compare with when last month was 0
+function change(now, before) {
+  if (!before) return ''
+  const percent = Math.round((100 * (now - before)) / before)
+  return percent === 0 ? 'same as last month' : `${percent > 0 ? '↑' : '↓'} ${Math.abs(percent)}% on last month`
+}
+// Each Insights card shows its first few items; "Show all" opens the rest
+const PREVIEW = 4
+const expanded = ref({ restock: false, slow: false, made_to_measure: false })
+const shown = (key) => (expanded.value[key] ? business.value[key] : business.value[key].slice(0, PREVIEW))
+const toggle = (key) => (expanded.value[key] = !expanded.value[key])
+const TREND_ROWS = [
+  ['sales_bdt', 'sales', true],
+  ['orders', 'orders', false],
+  ['pieces', 'pieces sold', false],
+  ['questions', 'chat questions', false],
+]
 
 onMounted(() => load(async () => {
   owner.value = await api('/owner/me')
@@ -77,6 +101,9 @@ async function setPayment(order, status) {
     sales.value.summary = (await api('/owner/orders')).summary // "payments to check" changes
   })
 }
+
+// An order line as the photo component expects a product; with no photo it shows the colour instead
+const pieceOf = (item) => ({ name: item.product_name, image_url: item.product_image_url, colours: [item.colour] })
 
 async function uploadCsv() {
   const file = upload.value?.files?.[0]
@@ -151,7 +178,7 @@ async function logOut() {
     </div>
 
     <div class="tabs" role="tablist">
-      <button v-for="[key, label] in [['sales', 'Orders'], ['questions', 'Customer questions'], ['orders', 'Custom orders'], ['products', 'Products'], ['messages', 'Messages']]"
+      <button v-for="[key, label] in [['sales', 'Orders'], ['insights', 'Insights'], ['orders', 'Custom orders'], ['products', 'Products'], ['messages', 'Messages']]"
         :key="key" role="tab" type="button" class="tab" :aria-selected="tab === key" @click="tab = key">
         {{ label }}
       </button>
@@ -213,9 +240,14 @@ async function logOut() {
             <tbody>
               <tr v-for="item in order.items" :key="item.id">
                 <td>
-                  {{ item.product_name }}<br />
-                  <span class="small muted">{{ item.is_custom && item.size === 'Made to measure' ? item.size : `Size ${item.size}` }}, {{ item.colour }}</span>
-                  <span v-if="item.custom_details" class="small"><br />{{ item.custom_details }}</span>
+                  <div class="piece">
+                    <ProductImage :product="pieceOf(item)" :colour="item.colour" class="piece-photo" />
+                    <div>
+                      {{ item.product_name }}<br />
+                      <span class="small muted">{{ item.is_custom && item.size === 'Made to measure' ? item.size : `Size ${item.size}` }}, {{ item.colour }}</span>
+                      <span v-if="item.custom_details" class="small"><br />{{ item.custom_details }}</span>
+                    </div>
+                  </div>
                 </td>
                 <td>
                   <span class="tag" :class="item.is_custom ? 'custom' : 'out'">{{ item.is_custom ? 'Made to order' : 'Ready-made' }}</span>
@@ -224,8 +256,8 @@ async function logOut() {
                 <td>{{ formatTaka(item.unit_price_bdt * item.quantity) }}</td>
                 <td>
                   <label class="visually-hidden" :for="`line-status-${item.id}`">Status</label>
-                  <select :id="`line-status-${item.id}`" :value="item.status" @change="setStatus(item, $event.target.value)">
-                    <option v-for="(label, key) in STATUS_LABELS" :key="key" :value="key">{{ label }}</option>
+                  <select :id="`line-status-${item.id}`" :value="item.status" :disabled="!item.next_statuses?.length" @change="setStatus(item, $event.target.value)">
+                  <option v-for="(label, key) in statusOptions(item)" :key="key" :value="key">{{ label }}</option>
                   </select>
                 </td>
               </tr>
@@ -235,57 +267,161 @@ async function logOut() {
       </article>
     </section>
 
-    <!-- Customer questions -->
-    <section v-if="tab === 'questions' && insights" class="panel">
-      <div class="stats">
-        <div class="stat"><span class="stat-value">{{ insights.total_questions }}</span><span>questions asked</span></div>
-        <div class="stat">
-          <span class="stat-value">{{ insights.answer_rate === null ? 'None yet' : `${insights.answer_rate}%` }}</span>
-          <span>answered from your catalogue</span>
-        </div>
-        <div class="stat"><span class="stat-value">{{ insights.voice_count }}</span><span>asked by voice</span></div>
-      </div>
-
-      <div class="columns">
-        <div>
-          <h2 class="section-title">Most asked</h2>
-          <ol v-if="insights.top_questions.length" class="ranked">
-            <li v-for="item in insights.top_questions" :key="item.question">
-              <span>{{ item.question }}</span><span class="times">{{ item.count }}×</span>
-            </li>
-          </ol>
-          <p v-else class="muted">No questions yet. They appear here as customers use the chat.</p>
-        </div>
-        <div>
-          <h2 class="section-title">Couldn’t answer</h2>
-          <p class="muted small">
-            Your catalogue had no good match for these. They show what customers want that you don’t sell,
-            or haven’t described yet.
-          </p>
-          <ol v-if="insights.unanswered_questions.length" class="ranked gaps">
-            <li v-for="item in insights.unanswered_questions" :key="item.question">
-              <span>{{ item.question }}</span><span class="times">{{ item.count }}×</span>
-            </li>
-          </ol>
-          <p v-else class="muted">Nothing yet.</p>
+    <!-- How the business is going (services/insights.business_insights) -->
+    <section v-if="tab === 'insights' && business" class="panel insights">
+      <!-- 1. The month at a glance -->
+      <div class="insight-block">
+        <h2 class="section-title">{{ business.trend.this_month_name }} so far</h2>
+        <div class="stats four">
+          <div v-for="[key, label, money] in TREND_ROWS" :key="key" class="stat">
+            <span class="stat-value">{{ money ? formatTaka(business.trend.this_month[key]) : business.trend.this_month[key] }}</span>
+            <span>{{ label }}</span>
+            <span class="small trend">
+              {{ change(business.trend.this_month[key], business.trend.last_month[key]) ||
+                `${business.trend.last_month_name}: ${money ? formatTaka(business.trend.last_month[key]) : business.trend.last_month[key]}` }}
+            </span>
+          </div>
         </div>
       </div>
 
-      <h2 class="section-title">Recent conversations</h2>
-      <div v-if="insights.recent.length" class="recent">
-        <div v-for="turn in insights.recent" :key="turn.asked_at" class="turn">
-          <p class="q">
-            {{ turn.question }}
-            <span v-if="turn.via_voice" class="tag custom">Voice</span>
-            <span v-if="!turn.answered" class="tag out">Not in catalogue</span>
-          </p>
-          <p class="a small muted">{{ plainText(turn.answer) }}</p>
+      <!-- 2. Stock decisions: three cards side by side, each with the same header and list -->
+      <div class="insight-block">
+        <h2 class="section-title">Stock to act on</h2>
+        <div class="cards three">
+          <article class="card">
+            <header class="card-head">
+              <h3>Restock now</h3>
+              <span class="tag" :class="business.restock.length ? 'urgent' : 'out'">{{ business.restock.length }}</span>
+            </header>
+            <p class="card-note">Selling fast, with two weeks of stock or less at the last {{ business.recent_days }} days’ pace.</p>
+            <ul v-if="business.restock.length" class="insight-list">
+              <li v-for="item in shown('restock')" :key="item.code">
+                <ProductImage :product="item" class="piece-photo" />
+                <div>
+                  <strong>{{ item.name }}</strong>
+                  <span class="small muted">{{ item.sold_recently }} sold lately · {{ item.stock }} left</span>
+                </div>
+                <span class="tag" :class="item.days_left <= 3 ? 'urgent' : 'warn'">
+                  {{ item.stock === 0 ? 'Sold out' : `${item.days_left} ${item.days_left === 1 ? 'day' : 'days'}` }}
+                </span>
+              </li>
+            </ul>
+            <p v-else class="card-empty">Nothing is running low.</p>
+            <button v-if="business.restock.length > PREVIEW" type="button" class="text-button small" @click="toggle('restock')">
+              {{ expanded.restock ? 'Show fewer' : `Show all ${business.restock.length}` }}
+            </button>
+          </article>
+
+          <article class="card">
+            <header class="card-head">
+              <h3>Think before restocking</h3>
+              <span class="tag" :class="business.slow.length ? 'warn' : 'out'">{{ business.slow.length }}</span>
+            </header>
+            <p class="card-note">
+              In stock, no ready-made sale in {{ business.recent_days }} days.
+              <template v-if="business.days_of_orders < business.recent_days">
+                Early days: your first order was {{ business.days_of_orders }} {{ business.days_of_orders === 1 ? 'day' : 'days' }} ago.
+              </template>
+            </p>
+            <ul v-if="business.slow.length" class="insight-list">
+              <li v-for="item in shown('slow')" :key="item.code">
+                <ProductImage :product="item" class="piece-photo" />
+                <div>
+                  <strong>{{ item.name }}</strong>
+                  <span class="small muted">
+                    {{ item.last_sold ? `Last sold ${formatDate(item.last_sold)}` : 'Never sold' }}<template v-if="item.rating"> · ★ {{ item.rating }}</template>
+                  </span>
+                </div>
+                <span class="small muted nowrap">{{ item.stock }} in stock</span>
+              </li>
+            </ul>
+            <p v-else class="card-empty">Everything in stock has sold lately.</p>
+            <button v-if="business.slow.length > PREVIEW" type="button" class="text-button small" @click="toggle('slow')">
+              {{ expanded.slow ? 'Show fewer' : `Show all ${business.slow.length}` }}
+            </button>
+          </article>
+
+          <article class="card">
+            <header class="card-head">
+              <h3>Often made to measure</h3>
+              <span class="tag" :class="business.made_to_measure.length ? 'warn' : 'out'">{{ business.made_to_measure.length }}</span>
+            </header>
+            <p class="card-note">Half or more of these orders were made to measure, so the standard sizes may not fit.</p>
+            <ul v-if="business.made_to_measure.length" class="insight-list">
+              <li v-for="item in shown('made_to_measure')" :key="item.code">
+                <ProductImage :product="item" class="piece-photo" />
+                <div>
+                  <strong>{{ item.name }}</strong>
+                  <span class="small muted">{{ item.made_to_measure }} of {{ item.orders }} orders · sizes {{ item.sizes.join(', ') }}</span>
+                </div>
+                <span class="tag warn">{{ item.share }}%</span>
+              </li>
+            </ul>
+            <p v-else class="card-empty">Your standard sizes fit most customers.</p>
+            <button v-if="business.made_to_measure.length > PREVIEW" type="button" class="text-button small" @click="toggle('made_to_measure')">
+              {{ expanded.made_to_measure ? 'Show fewer' : `Show all ${business.made_to_measure.length}` }}
+            </button>
+          </article>
         </div>
       </div>
-      <p v-else class="muted">No conversations yet.</p>
+
+      <!-- 3. Best sellers -->
+      <div class="insight-block">
+        <h2 class="section-title">Best sellers</h2>
+        <article class="card">
+          <p class="card-note">All time, with the size and colour customers choose most, so you restock the right ones.</p>
+          <div v-if="business.best_sellers.length" class="table-wrap">
+            <table class="best-table">
+              <thead><tr><th>Piece</th><th class="num">Sold</th><th class="num">Sales</th><th>Most popular</th><th>Rating</th><th class="num">Stock</th></tr></thead>
+              <tbody>
+                <tr v-for="item in business.best_sellers" :key="item.code">
+                  <td><div class="piece"><ProductImage :product="item" class="piece-photo" /><strong>{{ item.name }}</strong></div></td>
+                  <td class="num">{{ item.sold }}</td>
+                  <td class="num">{{ formatTaka(item.revenue_bdt) }}</td>
+                  <td>{{ item.top_size }}, {{ item.top_colour }}</td>
+                  <td>{{ item.rating ? `★ ${item.rating} (${item.reviews})` : '–' }}</td>
+                  <td class="num">{{ item.stock }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p v-else class="card-empty">No orders yet.</p>
+        </article>
+      </div>
+
+      <!-- 4. From the stylist chat: summaries only. The conversations themselves are not shown. -->
+      <div class="insight-block">
+        <h2 class="section-title">From the stylist chat</h2>
+        <article class="card chat-card">
+          <div class="chat-numbers">
+            <div>
+              <span class="stat-value">{{ business.chat.answer_rate === null ? '–' : `${business.chat.answer_rate}%` }}</span>
+              <span class="small">of {{ business.chat.total_questions }} questions answered from your catalogue</span>
+              <span class="small muted">{{ business.chat.voice_count }} asked by voice</span>
+            </div>
+            <div>
+              <span class="stat-value">{{ business.chat.chat_orders }} of {{ business.chat.order_count }}</span>
+              <span class="small">orders confirmed in the chat</span>
+            </div>
+          </div>
+          <div class="chat-topics">
+            <h3>What customers want that you don’t sell</h3>
+            <p class="card-note">Questions your catalogue couldn’t answer, by topic. A big topic is worth stocking, or describing better if you sell it.</p>
+            <ul v-if="business.chat.missing.length" class="topic-list">
+              <li v-for="item in business.chat.missing" :key="item.topic">
+                <div class="topic-head">
+                  <strong>{{ item.topic }}</strong>
+                  <span class="tag" :class="item.topic === 'Other' ? 'out' : 'warn'">{{ item.count }}×</span>
+                </div>
+                <span v-if="item.examples.length" class="small muted">{{ item.examples.map((example) => `“${example}”`).join(' · ') }}</span>
+              </li>
+            </ul>
+            <p v-else class="card-empty">Nothing yet. Every question so far matched your catalogue.</p>
+          </div>
+        </article>
+      </div>
     </section>
 
-    <!-- Custom orders -->
     <section v-if="tab === 'orders'" class="panel">
       <div class="pills filter">
         <button type="button" class="pill" :aria-pressed="!orderFilter" @click="orderFilter = ''">All</button>
@@ -301,7 +437,12 @@ async function logOut() {
             <tr v-for="item in orders" :key="item.id">
               <td>{{ item.order_id }}<br /><span class="small muted">{{ formatDate(item.ordered_at) }}</span></td>
               <td>{{ item.customer_name }}<br /><span class="small muted">{{ item.phone }}</span></td>
-              <td>{{ item.product_name }}<br /><span class="small muted">{{ item.size }}, {{ item.colour }} × {{ item.quantity }}</span></td>
+              <td>
+                <div class="piece">
+                  <ProductImage :product="pieceOf(item)" :colour="item.colour" class="piece-photo" />
+                  <div>{{ item.product_name }}<br /><span class="small muted">{{ item.size }}, {{ item.colour }} × {{ item.quantity }}</span></div>
+                </div>
+              </td>
               <td>
                 {{ item.custom_details }}<br /><span v-if="item.notes" class="small muted">{{ item.notes }}</span>
                 <a v-if="item.has_reference_image" :href="`/api/owner/custom-orders/${item.id}/reference-picture`"
@@ -314,8 +455,8 @@ async function logOut() {
               <td>{{ formatDate(item.ready_by) }}</td>
               <td>
                 <label class="visually-hidden" :for="`status-${item.id}`">Status</label>
-                <select :id="`status-${item.id}`" :value="item.status" @change="setStatus(item, $event.target.value)">
-                  <option v-for="(label, key) in STATUS_LABELS" :key="key" :value="key">{{ label }}</option>
+                <select :id="`status-${item.id}`" :value="item.status" :disabled="!item.next_statuses?.length" @change="setStatus(item, $event.target.value)">
+                  <option v-for="(label, key) in statusOptions(item)" :key="key" :value="key">{{ label }}</option>
                 </select>
               </td>
             </tr>
@@ -407,6 +548,157 @@ async function logOut() {
 .stats.four {
   grid-template-columns: repeat(4, 1fr);
 }
+/* Insights: four blocks, each a heading over one card or a row of cards */
+.insights {
+  display: grid;
+  gap: 36px;
+}
+.insight-block .section-title {
+  margin: 0 0 12px;
+}
+.insights .stats {
+  margin-bottom: 0;
+}
+.trend {
+  margin-top: 4px;
+  color: var(--muted);
+}
+.cards.three {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.card {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  min-width: 0;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-large);
+  background: #fff;
+}
+.card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.card h3 {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  font-weight: 600;
+}
+.card-note {
+  margin: 0;
+  max-width: none;
+  font-size: var(--step--1);
+  color: var(--muted);
+}
+.card-empty {
+  margin: 0;
+  padding: 14px 0 4px;
+  color: var(--muted);
+}
+.card > .text-button {
+  justify-self: start;
+}
+.insight-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.insight-list li {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+.insight-list li > div {
+  display: grid;
+  min-width: 0;
+}
+.insight-list strong {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.insight-list .piece-photo {
+  width: 40px;
+}
+.nowrap {
+  white-space: nowrap;
+}
+.tag.warn {
+  background: #fbf2dc;
+  color: #6b4a05;
+}
+.tag.urgent {
+  background: #fbeceb;
+  color: var(--danger);
+}
+.best-table td {
+  vertical-align: middle;
+}
+.best-table strong {
+  font-weight: 500;
+}
+.best-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  padding-right: 24px;
+}
+.chat-card {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: 28px;
+}
+.chat-numbers {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+.chat-numbers > div {
+  display: grid;
+  gap: 2px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: var(--jamdani);
+}
+.chat-topics {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+.topic-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.topic-list li {
+  display: grid;
+  gap: 2px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+.topic-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+@media (max-width: 1000px) {
+  .cards.three {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .chat-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .best {
   max-width: 520px;
   margin-bottom: 32px;
@@ -443,6 +735,16 @@ async function logOut() {
   gap: 10px;
   margin: 0 0 10px;
   max-width: none;
+}
+.piece {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.piece-photo {
+  flex: none;
+  width: 48px; /* the photo keeps its 3:4 shape, so it is 64px tall */
+  border-radius: 6px;
 }
 .message-photo img {
   display: block;
@@ -550,30 +852,6 @@ async function logOut() {
 .times {
   float: right;
   color: var(--muted);
-}
-.gaps li::marker {
-  color: var(--sindoor);
-}
-.recent {
-  display: grid;
-  gap: 4px;
-}
-.turn {
-  padding: 12px 0;
-  border-bottom: 1px solid var(--line);
-}
-.turn p {
-  margin: 0;
-  max-width: none;
-}
-.q {
-  font-weight: 500;
-}
-.a {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 .filter {
   margin-bottom: 16px;

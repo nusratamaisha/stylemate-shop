@@ -169,7 +169,8 @@ def sales_summary(tenant: Tenant) -> dict:
 
 
 def update_item_status(tenant: Tenant, item_id: int, status: str) -> OrderItem:
-    """Move one order line along: new, in production, shipped. Works for ready-made and custom lines."""
+    """Move one order line along: new, in production, shipped. Works for ready-made and custom lines.
+    Only forward, as OrderItem.NEXT_STATUSES allows; asking for the status it already has changes nothing."""
     if status not in OrderItem.STATUSES:
         raise UserInputError(f"Status must be one of: {', '.join(OrderItem.STATUSES)}.")
     item = db.session.scalar(
@@ -177,7 +178,14 @@ def update_item_status(tenant: Tenant, item_id: int, status: str) -> OrderItem:
     )
     if item is None:
         raise UserInputError("No order line with that ID.")
+    if status == item.status:
+        return item  # e.g. a double click
+    if status == "in_production" and not item.is_custom:
+        raise UserInputError("A ready-made piece is already made, so it can't be in production.")
+    if status not in item.next_statuses():
+        raise UserInputError(f"This line is already {_label(item.status)}, so it can't go back to {_label(status)}.")
     item.status = status
+
     db.session.commit()
     return item
 
@@ -190,3 +198,7 @@ def reference_picture_name(tenant: Tenant, item_id: int) -> str:
     if item is None or not item.reference_image:
         raise UserInputError("That order has no reference picture.")
     return item.reference_image
+
+
+def _label(status: str) -> str:
+    return status.replace("_", " ")  # "in_production" -> "in production"
