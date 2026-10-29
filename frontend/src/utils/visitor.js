@@ -1,7 +1,7 @@
 // A random ID kept in the browser, so Maira can tell one visitor's requests from another's.
 import { loadJSON, saveJSON } from './storage.js'
 
-const VISITOR_KEY = 'house-of-m-visitor'
+const VISITOR_KEY = 'stylemate-visitor'
 
 export function visitorId() {
   let id = loadJSON(VISITOR_KEY, null)

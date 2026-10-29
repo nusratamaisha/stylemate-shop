@@ -19,7 +19,7 @@ def settings_from_env() -> dict:
         "CHORUS_BASE_URL": env("CHORUS_BASE_URL", "https://api.maira.gigalogy.com/chorus"),
         "MAIRA_PROJECT_KEY": env("MAIRA_PROJECT_KEY", ""),
         "MAIRA_API_KEY": env("MAIRA_API_KEY", ""),
-        "SHOP_SLUG": env("SHOP_SLUG", "house-of-m"),
+        "SHOP_SLUG": env("SHOP_SLUG", "stylemate"),
         "UNANSWERED_SCORE_THRESHOLD": float(env("UNANSWERED_SCORE_THRESHOLD", "30")),
         "CONTACT_MESSAGES_PER_DAY": int(env("CONTACT_MESSAGES_PER_DAY", "5")),  # per visitor; 0 = no limit
         "PREVIEWS_PER_DAY": int(env("PREVIEWS_PER_DAY", "20")),  # each picture costs money

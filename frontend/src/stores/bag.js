@@ -2,7 +2,7 @@
 import { computed, reactive, watch } from 'vue'
 import { loadJSON, saveJSON } from '../utils/storage.js'
 
-const STORAGE_KEY = 'house-of-m-bag'
+const STORAGE_KEY = 'stylemate-bag'
 
 const state = reactive({ items: loadJSON(STORAGE_KEY, []) })
 watch(() => state.items, (items) => saveJSON(STORAGE_KEY, items), { deep: true })

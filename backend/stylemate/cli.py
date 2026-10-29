@@ -16,7 +16,7 @@ from .services import demo_requests, plans
 from .services.recommendations import set_up_recommender
 
 SHOP = {
-    "slug": "house-of-m",
+    "slug": "stylemate",
     "name": "Closet Corner",
     "tagline": "Everyday elegance, made to fit you.",
     "custom_base_days": 7,

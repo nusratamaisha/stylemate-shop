@@ -43,7 +43,7 @@ def app(maira, chorus, recommender, tmp_path, extra_config):
             "TESTING": True,
             "SQLALCHEMY_DATABASE_URI": "sqlite://",  # in memory, fresh for every test
             "SECRET_KEY": "test",
-            "SHOP_SLUG": "house-of-m",
+            "SHOP_SLUG": "stylemate",
             "UNANSWERED_SCORE_THRESHOLD": 30.0,
             "IMAGES_DIR": str(tmp_path),
             "UPLOADS_DIR": str(tmp_path / "uploads"),

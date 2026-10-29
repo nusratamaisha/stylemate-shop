@@ -105,7 +105,7 @@ def test_help_answers_are_sent_to_their_own_maira_dataset(app, tenant, maira):
     count = publisher.publish(tenant)
 
     # A new dataset with the product dataset's tag, so the chat profile finds it
-    assert maira.created_datasets == [{"name": "house-of-m-help", "idx_column": "help_id", "tags": ["house_of_m"]}]
+    assert maira.created_datasets == [{"name": "stylemate-help", "idx_column": "help_id", "tags": ["house_of_m"]}]
     assert tenant.maira_help_dataset_id == "help-dataset-1"
     dataset_id, filename, content = maira.uploads[0]
     text = content.decode()
