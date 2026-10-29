@@ -1,24 +1,53 @@
+# CI: every push to main and every pull request runs the backend tests, builds the frontend,
+# and builds both Docker images. A red check means: don't merge.
+# No secrets are needed: the tests use fakes for Maira, Chorus and the recommender (tests/fakes.py).
+
 name: CI
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:  # a newer push to the same branch cancels the older run
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   backend:
     name: Backend tests
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-      - run: cd backend && uv sync --locked
-      - run: cd backend && uv run pytest
+        with:
+          enable-cache: true
+      - run: uv sync --locked  # the Python version comes from backend/.python-version
+      - run: uv run pytest
 
   frontend:
     name: Frontend build
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - run: cd frontend && npm ci
-      - run: cd frontend && npm run build
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+
+  docker:
+    name: Docker images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t stylemate-backend ./backend
+      - run: docker build -t stylemate-frontend ./frontend
