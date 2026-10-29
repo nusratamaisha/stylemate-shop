@@ -1,10 +1,9 @@
-# Closet Corner: AI shopping assistant for online clothing stores
+# Stylemate: AI shopping assistant for online clothing stores
 
 StyleMate is an AI shopping assistant for online clothing shops. Customers ask by text or voice and get answers only from the shop's own catalogue. They can customize dresses with prices calculated by the shop. Owners see what customers ask, including what the shop couldn't answer, and manage custom orders.
 
-Closet Corner (called The House of "M" until October 13, 2026) is a fictional shop with sample data, used to demonstrate the platform. Built with Flask, Vue and Gigalogy's Maira (answers) and Chorus (speech-to-text).
+Closet Corner is a fictional shop with sample data, used to demonstrate the platform. Built with Flask, Vue and Gigalogy's Maira (answers) and Chorus (speech-to-text).
 
-How it all fits together: [docs/architecture.md](docs/architecture.md)
 
 ## What you need
 
