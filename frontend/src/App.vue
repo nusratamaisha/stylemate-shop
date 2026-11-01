@@ -46,7 +46,7 @@ const firstName = computed(() => {
             <circle cx="12" cy="8" r="4" />
             <path d="M4 20c0-4 3.6-6 8-6s8 2 8 6" />
           </svg>
-          <span>{{ account.state.customer ? firstName : 'Log in' }}</span>
+          <span>{{ account.state.customer ? firstName : 'Log in / Sign up' }}</span>
         </RouterLink>
         <RouterLink to="/bag" class="bag-link">
           Bag <span v-if="bag.count.value" class="count">{{ bag.count.value }}</span>
