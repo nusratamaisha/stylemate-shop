@@ -14,7 +14,7 @@ const account = useAccount()
 const customer = reactive({ name: '', phone: '', address: '', delivery_area: '' })
 // Delivery, payment and contact fields, the total and the account prefill live in CheckoutFields
 const payment = reactive({ method: '', transaction_id: '' })
-const remember = ref(true)
+const remember = ref(false)
 // One code per piece, so changing a quantity doesn't ask for new suggestions
 
 const placing = ref(false)

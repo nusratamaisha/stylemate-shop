@@ -17,16 +17,19 @@ const props = defineProps({
 })
 
 // Ticked: save these details for next time (to the account, or for a guest in this browser)
-const remember = defineModel('remember', { type: Boolean, default: true })
+const remember = defineModel('remember', { type: Boolean, default: false })
 
 const shop = useShop()
 const account = useAccount()
 
 // A returning customer doesn't retype what the shop or this device already knows (utils/savedDetails.js)
 watch(() => [account.state.loaded, account.state.customer], ([loaded, loggedIn]) => {
-  if (loggedIn) fillIn(props.customer, props.payment, loggedIn)
-  else if (loaded) fillIn(props.customer, props.payment, deviceDetails())
+  if (!loaded && !loggedIn) return
+  const saved = loggedIn || deviceDetails()
+  fillIn(props.customer, props.payment, saved)
+  remember.value = Boolean(saved) // a new guest must tick the box: the next person here may be someone else
 }, { immediate: true })
+
 
 // Shown so the customer sees the total before ordering. The server works the charge out again.
 const shippingOptions = computed(() => shop.info?.shipping || [])
