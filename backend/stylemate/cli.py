@@ -261,5 +261,7 @@ def _upsert_owner(tenant: Tenant, email: str, password: str) -> None:
     if user is None:
         user = User(tenant_id=tenant.id, email=email)
         db.session.add(user)
+    user.tenant_id = tenant.id  # an existing owner must follow the shop being seeded
     user.set_password(password)
     db.session.commit()
+
