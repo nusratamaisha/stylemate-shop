@@ -26,7 +26,6 @@ const FEATURES = [
   ['See it before you buy', 'A picture preview of the piece with the customer’s changes, or on their own photo in the size they chose.'],
   ['Pay the way Bangladesh pays', 'Cash on delivery, or bKash, Nagad and Rocket with a transaction ID you check. No gateway fees.'],
   ['Know what customers want', 'Your dashboard shows every order and every question, including the ones your shop couldn’t answer, so you know what to stock next.'],
-  ['Suggestions that fit', '“You may also like” on product pages, only with pieces in stock and in the customer’s size.'],
 ]
 
 const form = reactive({ shop_name: '', owner_name: '', phone: '', facebook_page: '', product_count: '', plan: '', message: '' })
@@ -57,7 +56,6 @@ const planLines = (plan) => [
   `${plan.chat_questions.toLocaleString('en-IN')} AI chat questions a month`,
   plan.voice ? 'Voice questions' : null,
   plan.previews ? `${plan.previews.toLocaleString('en-IN')} picture previews a month` : null,
-  plan.smart_recommendations ? 'Smart suggestions (Gigalogy)' : null,
   plan.products ? `Up to ${plan.products} products` : 'Unlimited products',
 ].filter(Boolean)
 const POPULAR = 'growth' // the plan marked "Most shops choose this"

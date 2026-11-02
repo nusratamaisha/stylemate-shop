@@ -82,7 +82,7 @@ async function save(details, done) {
       <template v-else>
         <p v-if="account.state.customer.preferred_size" class="small">Usual size: <strong>{{ account.state.customer.preferred_size }}</strong></p>
         <p v-if="measurementsText" class="small">Measurements: {{ measurementsText }}</p>
-        <p class="muted small">We use them to suggest your size, and soon to recommend pieces that fit you.</p>
+        <p class="muted small">We use them to suggest your size.</p>
         <button type="button" class="text-button small" :disabled="saving"
           @click="save({ preferred_size: '', measurements: null }, 'Your size and measurements are forgotten.')">
           Forget my size and measurements
