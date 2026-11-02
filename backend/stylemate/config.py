@@ -28,6 +28,8 @@ def settings_from_env() -> dict:
         "REFERENCE_PICTURES_PER_DAY": int(env("REFERENCE_PICTURES_PER_DAY", "20")),
         "MAX_CONTENT_LENGTH": 5 * 1024 * 1024,  # uploads (CSV, voice) up to 5 MB
         "SESSION_COOKIE_SAMESITE": "Lax",
+        "SESSION_COOKIE_SECURE": env("SESSION_COOKIE_SECURE") == "1",  # HTTPS only; on for the server, off on localhost
+
         # How many proxies (e.g. nginx in Docker) sit in front of Flask. 0 when the browser talks to Flask directly.
         "PROXY_COUNT": int(env("PROXY_COUNT", "0")),
     }
