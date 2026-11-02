@@ -35,7 +35,6 @@ class Tenant(db.Model):
     maira_dataset_id: Mapped[str] = mapped_column(String(64), default="")
     maira_help_dataset_id: Mapped[str] = mapped_column(String(64), default="")  # FAQ and size guide; made by `flask sync-help`
     maira_image_profile_id: Mapped[str] = mapped_column(String(64), default="")  # empty: no image preview
-    recommender_ready: Mapped[bool] = mapped_column(default=False)  # set by `flask sync-recommender`; off: no suggestions
     plan: Mapped[str] = mapped_column(String(20), default="growth")  # a key of services/plans.PLANS; `flask set-plan`
     custom_base_days: Mapped[int] = mapped_column(default=7)
     shipping_inside_dhaka_bdt: Mapped[int] = mapped_column(default=80)
