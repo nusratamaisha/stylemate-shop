@@ -14,7 +14,8 @@ const firstName = computed(() => {
   const name = (account.state.customer?.name || '').trim().split(/\s+/)[0]
   return name.charAt(0).toUpperCase() + name.slice(1)
 })
-const form = reactive({ name: '', email: '', phone: '', password: '' })
+const EMPTY_FORM = { name: '', email: '', phone: '', password: '' }
+const form = reactive({ ...EMPTY_FORM })
 const busy = ref(false)
 const error = ref('')
 
@@ -28,7 +29,7 @@ async function submit() {
   try {
     if (mode.value === 'register') await account.register({ ...form })
     else await account.logIn(form.email, form.password)
-    form.password = ''
+    Object.assign(form, EMPTY_FORM) // the next person on this device starts with an empty form
   } catch (err) {
     error.value = err.message
   } finally {
@@ -108,7 +109,7 @@ watch(() => account.state.customer, (customer) => {
         </div>
         <div class="field">
           <label for="account-email">Email</label>
-          <input id="account-email" v-model="form.email" type="email" autocomplete="email" required />
+          <input id="account-email" v-model="form.email" type="email" autocomplete="off" required />
         </div>
         <div v-if="mode === 'register'" class="field">
           <label for="account-phone">Phone number <span class="muted">(optional)</span></label>
@@ -117,7 +118,7 @@ watch(() => account.state.customer, (customer) => {
         <div class="field">
           <label for="account-password">Password<span v-if="mode === 'register'" class="muted"> (at least 6 characters)</span></label>
           <input id="account-password" v-model="form.password" type="password" minlength="6" required
-            :autocomplete="mode === 'register' ? 'new-password' : 'current-password'" />
+            autocomplete="new-password"/>
         </div>
 
         <p v-if="error" class="message error" role="alert">{{ error }}</p>
