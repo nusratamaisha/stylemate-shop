@@ -1,4 +1,9 @@
-# The site address. Caddy gets and renews its HTTPS certificate by itself.
-8-234-109-236.sslip.io {
+# The site address. Caddy gets and renews its HTTPS certificates by itself.
+closetcorner.duckdns.org {
 	reverse_proxy frontend:80
+}
+
+# Other addresses send visitors to the main one, so a login cookie always belongs to one address.
+stylemate-shop.duckdns.org, 8-234-109-236.sslip.io {
+	redir https://closetcorner.duckdns.org{uri} permanent
 }
