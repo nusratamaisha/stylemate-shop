@@ -31,4 +31,6 @@ USER app
 EXPOSE 5000
 
 # Bring the database up to date, then serve. --timeout 150: a picture preview can take 120 s.
-CMD ["sh", "-c", "flask db upgrade && exec gunicorn --bind 0.0.0.0:5000 --workers 2 --timeout 150 --access-logfile - 'stylemate:create_app()'"]
+# Each worker handles one request at a time, so WEB_WORKERS sets how many can wait on Gigalogy at once.
+CMD ["sh", "-c", "flask db upgrade && exec gunicorn --bind 0.0.0.0:5000 --workers ${WEB_WORKERS:-2} --timeout 150 --access-logfile - 'stylemate:create_app()'"]
+
