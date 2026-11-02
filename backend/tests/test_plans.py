@@ -61,14 +61,6 @@ def test_a_catalogue_bigger_than_the_plan_is_refused(owner_client, tenant):
     assert response.status_code == 400 and "up to 50 products" in response.get_json()["error"]
 
 
-def test_starter_shows_the_shops_own_picks_without_asking_gigalogy(client, tenant, recommender):
-    tenant.recommender_ready = True
-    put_on(tenant, "starter")
-    recommender.similar = ["SR-010"]
-    client.get("/api/products/SR-003/recommendations")
-    assert recommender.calls == []
-
-
 def test_the_owner_is_warned_from_80_percent(owner_client, tenant):
     put_on(tenant, "starter", chat=400)
     meters = owner_client.get("/api/owner/usage").get_json()["meters"]

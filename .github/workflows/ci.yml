@@ -1,6 +1,6 @@
 # CI: every push to main and every pull request runs the backend tests, builds the frontend,
 # and builds both Docker images. A red check means: don't merge.
-# No secrets are needed: the tests use fakes for Maira, Chorus and the recommender (tests/fakes.py).
+# No secrets are needed: the tests use fakes for Maira and Chorus (tests/fakes.py).
 
 name: CI
 

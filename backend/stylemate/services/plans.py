@@ -3,8 +3,8 @@
 The ONE place for plan prices and limits. The public StyleMate page shows them
 (GET /api/plans) and the app enforces them, so they can never disagree.
 
-Limits are on what costs money per use: AI chat questions (Maira), voice (Chorus),
-picture previews (an image model) and Gigalogy recommendations. Each month starts fresh.
+Limits are on what costs money per use: AI chat questions (Maira), voice (Chorus)
+and picture previews (an image model). Each month starts fresh.
 A shop at its limit gets a grace margin (GRACE) so its customers aren't cut off at
 once; the owner sees a warning from 80%.
 
@@ -31,21 +31,17 @@ class Plan:
     chat_questions: int  # per month, typed or spoken
     voice: bool
     previews: int  # picture previews per month; 0 = not included
-    smart_recommendations: bool  # Gigalogy's recommender; without it, no suggestions
     products: int  # 0 = unlimited
     pitch: str
 
 
 PLANS = {
     plan.key: plan for plan in [
-        Plan("starter", "Starter", 1500, chat_questions=500, voice=False, previews=50,
-             smart_recommendations=False, products=50,
+        Plan("starter", "Starter", 1500, chat_questions=500, voice=False, previews=50, products=50,
              pitch="For a shop starting out: answers customers day and night."),
-        Plan("growth", "Growth", 4000, chat_questions=2000, voice=True, previews=200,
-             smart_recommendations=True, products=200,
-             pitch="For a busy page: voice questions, previews and smart suggestions."),
-        Plan("pro", "Pro", 9000, chat_questions=6000, voice=True, previews=600,
-             smart_recommendations=True, products=0,
+        Plan("growth", "Growth", 4000, chat_questions=2000, voice=True, previews=200, products=200,
+             pitch="For a busy page: voice questions and picture previews."),
+        Plan("pro", "Pro", 9000, chat_questions=6000, voice=True, previews=600, products=0,
              pitch="For a large catalogue with many customers."),
     ]
 }

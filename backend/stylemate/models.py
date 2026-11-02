@@ -82,7 +82,6 @@ class Customer(db.Model):
     password_hash: Mapped[str] = mapped_column(String(300))
     created_at: Mapped[datetime] = mapped_column(default=utc_now)
     # Remembered from their last order (if they agreed), so checkout fills itself in next time.
-    # Size and measurements are also what future recommendations will start from.
     address: Mapped[str] = mapped_column(Text, default="")
     delivery_area: Mapped[str] = mapped_column(String(20), default="")
     payment_method: Mapped[str] = mapped_column(String(20), default="")  # never a transaction ID

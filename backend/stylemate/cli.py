@@ -10,10 +10,8 @@ from .config import DATA_DIR
 from .errors import ServiceUnavailableError, UserInputError
 from .extensions import db
 from .models import CustomizationOption, FaqItem, SizeGuideRow, SleeveLength, Tenant, User
-from .clients.recommender import KEY_MAP
 from .services.catalog import parse_products_csv, save_products
 from .services import demo_requests, plans
-from .services.recommendations import set_up_recommender
 
 SHOP = {
     "slug": "stylemate",
@@ -103,7 +101,6 @@ DEFAULT_SLEEVE_LENGTHS = [
 def register_cli(app: Flask) -> None:
     app.cli.add_command(seed)
     app.cli.add_command(sync_help)
-    app.cli.add_command(sync_recommender)
     app.cli.add_command(set_plan)
     app.cli.add_command(list_demo_requests)
 
@@ -123,24 +120,6 @@ def sync_help() -> None:
         raise click.ClickException(str(exc)) from exc
     click.echo(f"Sent {count} answers to Maira dataset {tenant.maira_help_dataset_id}. "
                "The assistant learns them in about a minute.")
-
-
-@click.command("sync-recommender")
-def sync_recommender() -> None:
-    """Set up Gigalogy's recommender for "You may also like".
-
-    Creates the item index (first time only), maps our columns, uploads the catalogue and trains.
-    Run it again after the catalogue changes. Until it has run, no suggestions are shown.
-    """
-    tenant = db.session.scalar(db.select(Tenant).where(Tenant.slug == current_app.config["SHOP_SLUG"]))
-    if tenant is None:
-        raise click.ClickException("The shop isn't set up yet. Run: uv run flask seed")
-    services = current_app.extensions["stylemate"]
-    try:
-        count = set_up_recommender(tenant, services.recommender, KEY_MAP, report=click.echo)
-    except (UserInputError, ServiceUnavailableError) as exc:
-        raise click.ClickException(f"{exc}\nNothing was switched on: no suggestions are shown yet.") from exc
-    click.echo(f"Done: {count} products sent and trained. Product pages now ask Gigalogy for 'You may also like'.")
 
 
 @click.command("set-plan")

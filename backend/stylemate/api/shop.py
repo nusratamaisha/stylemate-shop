@@ -182,14 +182,6 @@ def create_order():
     return jsonify({**order.to_dict(), "customer_order_number": accounts.order_number(order)}), 201
 
 
-@bp.get("/products/<code>/recommendations")
-def product_recommendations(code: str):
-    """ "You may also like": pieces similar to this one that this customer can buy."""
-    return jsonify(services().recommendations.similar(
-        current_tenant(), code, _visitor_id(request.args.get("visitor_id")), current_customer()))
-
-
-
 # --- StyleMate's own public page (selling to shop owners), not the shop's ---
 
 @bp.get("/plans")

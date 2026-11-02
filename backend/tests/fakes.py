@@ -1,4 +1,4 @@
-"""Stand-ins for the Maira, Chorus and recommender clients, so tests never call the real APIs.
+"""Stand-ins for the Maira, Chorus clients, so tests never call the real APIs.
 
 They have the same methods as the real clients, so the app can't tell the difference.
 """
@@ -62,51 +62,6 @@ class FakeMaira:
     def train_dataset(self, dataset_id):
         self.trained.append(dataset_id)
         return {}
-
-
-class FakeRecommender:
-    """Gigalogy's recommender, without the network. `similar` is the IDs it answers with."""
-
-    def __init__(self):
-        self.similar: list[str] = []
-        self.fail = False
-        self.calls: list[tuple] = []
-        self.indices = ["gpt_dataset", "gpt_profiles", "chorus"]  # a Maira project: no item index yet
-        self.uploads: list[tuple] = []
-
-    def _check(self):
-        if self.fail:
-            raise ServiceUnavailableError("Recommender is down")
-
-    def get_indices(self):
-        self._check()
-        return {"detail": {"response": list(self.indices)}}
-
-    def has_item_index(self):
-        return "items" in self.get_indices()["detail"]["response"]
-
-    def create_indices(self):
-        self.calls.append(("create_indices",))
-        self.indices.append("items")
-        return {"detail": "ok"}
-
-    def save_mapper(self, key_map):
-        self.calls.append(("save_mapper", key_map))
-        return {"detail": "ok"}
-
-    def upload_items(self, filename, content):
-        self._check()
-        self.uploads.append((filename, content))
-        return {"detail": "ok"}
-
-    def train_items(self):
-        self.calls.append(("train_items",))
-        return {"detail": "ok"}
-
-    def similar_items(self, *, user_id, item_id, member_id=None):
-        self._check()
-        self.calls.append(("similar_items", user_id, item_id, member_id))
-        return list(self.similar)
 
 
 class FakeChorus:
