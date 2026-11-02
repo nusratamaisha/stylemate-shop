@@ -1,0 +1,4 @@
+# The site address. Caddy gets and renews its HTTPS certificate by itself.
+8-234-109-236.sslip.io {
+	reverse_proxy frontend:80
+}

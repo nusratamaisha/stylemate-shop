@@ -1,0 +1,26 @@
+# Extra settings for the Google Cloud server, on top of compose.yaml. On the server:
+#   docker compose -f compose.yaml -f compose.prod.yaml up -d --build
+
+services:
+  backend:
+    environment:
+      SESSION_COOKIE_SECURE: "1"  # the site is HTTPS, so the login cookie can be HTTPS-only
+      WEB_WORKERS: "8"  # 4 cores, and most of a worker's time is spent waiting for Gigalogy
+
+  frontend:
+    ports: !reset []  # no port of its own here: visitors come in through Caddy
+
+  caddy:
+    image: caddy:2.10-alpine
+    ports:
+      - "80:80"  # Caddy sends these visitors on to HTTPS
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data  # the HTTPS certificate survives restarts
+    depends_on:
+      - frontend
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
