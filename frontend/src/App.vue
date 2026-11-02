@@ -7,6 +7,7 @@ import ShopMenu from './components/ShopMenu.vue'
 import { useAccount } from './stores/account.js'
 import { useBag } from './stores/bag.js'
 import { useShop } from './stores/shop.js'
+import { OWNER_HOME, PLANS_PAGE, SHOP_HOME } from './utils/sites.js'
 
 const shop = useShop()
 // The name comes from the shop's row in the database, so another shop needs no code change.
@@ -30,7 +31,7 @@ const firstName = computed(() => {
   <a class="skip" href="#main">Skip to content</a>
   <header class="site-header">
     <div class="page bar">
-      <RouterLink to="/" class="brand" :aria-label="`${shopName}, home`">
+      <RouterLink :to="isOwnerPage ? '/owner' : '/'" class="brand" :aria-label="`${shopName}, home`">
         <BrandMark size="2.25rem" />
         <span class="brand-name">{{ shopName }}</span>
       </RouterLink>
@@ -53,7 +54,7 @@ const firstName = computed(() => {
         </RouterLink>
       </div>
       <nav v-else class="nav" aria-label="Owner">
-        <RouterLink to="/">View shop</RouterLink>
+          <a :href="SHOP_HOME">View shop</a>
       </nav>
     </div>
   </header>
@@ -81,10 +82,10 @@ const firstName = computed(() => {
       </p>
       <!-- How other Facebook shops find StyleMate: every storefront is also its advert -->
       <p v-if="!isOwnerPage" class="powered small muted">
-        This shop’s website and AI stylist run on <RouterLink to="/stylemate">StyleMate</RouterLink>.
-        Sell on Facebook? <RouterLink to="/stylemate">Get one for your shop</RouterLink>.
+        This shop’s website and AI stylist run on <a :href="PLANS_PAGE">StyleMate</a>.
+        Sell on Facebook? <a :href="PLANS_PAGE">Get one for your shop</a>.
         <!-- /owner sends a logged-out owner to /owner/login, and a logged-in one straight to the dashboard -->
-        Run this shop? <RouterLink to="/owner">Owner log in</RouterLink>.
+        Run this shop? <a :href="OWNER_HOME">Owner log in</a>.
       </p>
     </div>
   </footer>

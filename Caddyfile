@@ -1,9 +1,26 @@
-# The site address. Caddy gets and renews its HTTPS certificates by itself.
+# Three addresses for one app, so the shop's and the owner's logins stay in separate cookies.
+# Caddy gets and renews the HTTPS certificates by itself.
+
+# The shop, for customers
 closetcorner.duckdns.org {
+	redir /owner* https://closetcorner-owner.duckdns.org{uri}
+	redir /stylemate* https://stylemate-shop.duckdns.org{uri}
 	reverse_proxy frontend:80
 }
 
-# Other addresses send visitors to the main one, so a login cookie always belongs to one address.
-stylemate-shop.duckdns.org, 8-234-109-236.sslip.io {
+# The owner's dashboard
+closetcorner-owner.duckdns.org {
+	redir / /owner
+	reverse_proxy frontend:80
+}
+
+# StyleMate's plans page, for shops thinking of buying
+stylemate-shop.duckdns.org {
+	redir / /stylemate
+	reverse_proxy frontend:80
+}
+
+# The first address, so old links keep working
+8-234-109-236.sslip.io {
 	redir https://closetcorner.duckdns.org{uri} permanent
 }

@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { api } from '../api.js'
 import ProductImage from '../components/ProductImage.vue'
 import { formatDate, formatTaka } from '../utils/format.js'
+import { SHOP_HOME } from '../utils/sites.js'
 
 const router = useRouter()
 const owner = ref(null)
@@ -502,7 +503,7 @@ async function logOut() {
           <tbody>
             <tr v-for="product in products" :key="product.code">
               <td>{{ product.code }}</td>
-              <td><RouterLink :to="`/products/${product.code}`">{{ product.name }}</RouterLink></td>
+              <td><a :href="`${SHOP_HOME}products/${product.code}`">{{ product.name }}</a></td>
               <td>{{ product.category }}</td>
               <td>{{ formatTaka(product.price_bdt) }}</td>
               <td>{{ product.stock }}</td>

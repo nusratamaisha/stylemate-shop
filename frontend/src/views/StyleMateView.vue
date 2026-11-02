@@ -5,6 +5,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { api } from '../api.js'
 import { formatTaka } from '../utils/format.js'
+import { OWNER_HOME, SHOP_HOME } from '../utils/sites.js'
 
 const plans = ref([])
 const pricesAreExamples = ref(false)
@@ -69,8 +70,8 @@ const POPULAR = 'growth' // the plan marked "Most shops choose this"
         <nav class="links" aria-label="StyleMate">
           <a href="#how">How it works</a>
           <a href="#pricing">Pricing</a>
-          <RouterLink to="/">See a live shop</RouterLink>
-          <RouterLink to="/owner">Owner log in</RouterLink>
+          <a :href="SHOP_HOME">See a live shop</a>
+          <a :href="OWNER_HOME">Owner log in</a>
         </nav>
         <a href="#demo" class="cta small-cta">Request a demo</a>
       </div>
@@ -87,7 +88,7 @@ const POPULAR = 'growth' // the plan marked "Most shops choose this"
         </p>
         <div class="actions">
           <a href="#demo" class="cta">Request a demo</a>
-          <RouterLink to="/" class="ghost">See a live shop: Closet Corner →</RouterLink>
+          <a :href="SHOP_HOME" class="ghost">See a live shop: Closet Corner →</a>
         </div>
       </section>
 
@@ -194,8 +195,8 @@ const POPULAR = 'growth' // the plan marked "Most shops choose this"
     <footer class="foot">
       <div class="wrap">
         <p><strong>StyleMate</strong>: AI shop websites for clothing sellers in Bangladesh. AI answers by Gigalogy’s Maira.</p>
-        <p class="muted"><RouterLink to="/">Closet Corner</RouterLink> is a demo shop with sample data.
-          Already a StyleMate shop? <RouterLink to="/owner">Owner log in</RouterLink>.</p>
+        <p class="muted"><a :href="SHOP_HOME">Closet Corner</a> is a demo shop with sample data.
+          Already a StyleMate shop? <a :href="OWNER_HOME">Owner log in</a>.</p>
       </div>
     </footer>
   </div>
