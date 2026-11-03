@@ -49,8 +49,8 @@ const firstName = computed(() => {
           </svg>
           <span>{{ account.state.customer ? firstName : 'Log in / Sign up' }}</span>
         </RouterLink>
-        <RouterLink to="/bag" class="bag-link">
-          Bag <span v-if="bag.count.value" class="count">{{ bag.count.value }}</span>
+        <RouterLink to="/cart" class="bag-link">
+          Cart <span v-if="bag.count.value" class="count">{{ bag.count.value }}</span>
         </RouterLink>
       </div>
       <nav v-else class="nav" aria-label="Owner">

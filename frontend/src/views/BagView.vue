@@ -48,7 +48,7 @@ async function placeOrder() {
 
 <template>
   <div class="page">
-    <h1 class="title">Your bag</h1>
+    <h1 class="title">Your cart</h1>
 
     <section v-if="confirmation" class="confirmation" role="status">
       <h2>Thank you, {{ customer.name }}</h2>
@@ -73,7 +73,7 @@ async function placeOrder() {
     </section>
 
     <div v-else-if="!bag.items.value.length" class="empty">
-      <p>Your bag is empty.</p>
+      <p>Your cart is empty.</p>
       <RouterLink to="/shop" class="button">Browse the collection</RouterLink>
     </div>
 

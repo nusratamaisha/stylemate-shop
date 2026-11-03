@@ -14,8 +14,9 @@ import { canRecord, startRecording } from '../utils/wavRecorder.js'
 
 const MAX_RECORDING_SECONDS = 15
 const SUGGESTIONS = [
-  'I need something for Eid. What do you have under ৳3,000?',
-  'Can I get a dress with long sleeves?',
+  'How do I choose my size?',
+  'Can you make a dress to my measurements?',
+  'How long does delivery take?',
 ]
 
 const chat = useChat()
@@ -40,7 +41,7 @@ function goToCheckout(message, item) {
     message.inBag = true // pressing the link again must not add a second one
   }
   chat.state.open = false // so the checkout form isn't hidden behind the chat
-  router.push('/bag')
+  router.push('/cart')
 }
 
 const draft = ref('')

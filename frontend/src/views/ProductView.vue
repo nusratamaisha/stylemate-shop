@@ -71,7 +71,7 @@ const buttonText = computed(() => {
   if (madeToMeasure.value && !custom.value.measurementsComplete) return 'Enter your measurements'
   if (!madeToMeasure.value && !size.value) return 'Choose a size'
   if (!isCustom.value && !product.value?.in_stock) return 'Out of stock'
-  return isCustom.value ? `Add custom piece to bag (${formatTaka(price.value)})` : 'Add to bag'
+  return isCustom.value ? `Add custom piece to cart (${formatTaka(price.value)})` : 'Add to cart'
 })
 
 function addToBag() {
@@ -185,7 +185,7 @@ function askAbout() {
 
         <div class="buy">
           <button type="button" class="button full" :disabled="!canAdd" @click="addToBag">{{ buttonText }}</button>
-          <p v-if="added" class="message ok" role="status">Added to your bag. <RouterLink to="/bag">View bag</RouterLink></p>
+            <p v-if="added" class="message ok" role="status">Added to your cart. <RouterLink to="/cart">View cart</RouterLink></p>
           <button type="button" class="text-button" @click="askAbout">Ask the stylist about this piece</button>
         </div>
       </div>

@@ -16,7 +16,8 @@ export default createRouter({
     { path: '/', component: HomeView },
     { path: '/shop', component: ShopView },
     { path: '/products/:code', component: ProductView, props: true },
-    { path: '/bag', component: BagView },
+    { path: '/cart', component: BagView },
+    { path: '/bag', redirect: '/cart' }, // the old address, so saved links still work
     { path: '/size-guide', component: SizeGuideView },
     { path: '/help', component: HelpView },
     { path: '/account', component: AccountView },
