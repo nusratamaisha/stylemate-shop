@@ -2,10 +2,10 @@
 // StyleMate's own public page: how a Facebook clothing shop learns what StyleMate does,
 // sees the plans and asks for a demo. Not part of any shop, so App.vue shows it without
 // the shop's header, footer and chat. Plans and prices come from Flask (services/plans.py).
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, onUnmounted, reactive, ref } from 'vue'
 import { api } from '../api.js'
 import { formatTaka } from '../utils/format.js'
-import { OWNER_HOME, SHOP_HOME } from '../utils/sites.js'
+import { SHOP_HOME } from '../utils/sites.js'
 
 const plans = ref([])
 const pricesAreExamples = ref(false)
@@ -18,6 +18,20 @@ onMounted(async () => {
     plans.value = [] // the rest of the page still works; the form still sends
   }
 })
+
+
+// This page sells StyleMate to other shops, so the browser tab shows StyleMate, not the shop.
+// The shop's title and icon come back when you leave, because the app shares one page head.
+const shopTab = { title: document.title, icon: document.querySelector('link[rel="icon"]').href }
+onMounted(() => {
+  document.title = 'StyleMate: AI shop websites for clothing sellers'
+  document.querySelector('link[rel="icon"]').href = '/stylemate-icon.svg'
+})
+onUnmounted(() => {
+  document.title = shopTab.title
+  document.querySelector('link[rel="icon"]').href = shopTab.icon
+})
+
 
 const FEATURES = [
   ['An AI stylist that never sleeps', 'Answers size, fabric, colour and price questions in Bangla or English, day and night, only from your own catalogue, so it never makes things up.'],
@@ -71,7 +85,6 @@ const POPULAR = 'growth' // the plan marked "Most shops choose this"
           <a href="#how">How it works</a>
           <a href="#pricing">Pricing</a>
           <a :href="SHOP_HOME">See a live shop</a>
-          <a :href="OWNER_HOME">Owner log in</a>
         </nav>
         <a href="#demo" class="cta small-cta">Request a demo</a>
       </div>
@@ -195,8 +208,7 @@ const POPULAR = 'growth' // the plan marked "Most shops choose this"
     <footer class="foot">
       <div class="wrap">
         <p><strong>StyleMate</strong>: AI shop websites for clothing sellers in Bangladesh. AI answers by Gigalogy’s Maira.</p>
-        <p class="muted"><a :href="SHOP_HOME">Closet Corner</a> is a demo shop with sample data.
-          Already a StyleMate shop? <a :href="OWNER_HOME">Owner log in</a>.</p>
+        <p class="muted"><a :href="SHOP_HOME">Closet Corner</a> is a demo shop with sample data.</p>
       </div>
     </footer>
   </div>
