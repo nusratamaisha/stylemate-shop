@@ -22,8 +22,8 @@ def test_the_public_page_gets_the_three_plans_from_one_place(client):
 
 
 def test_chat_questions_stop_after_the_grace_margin_and_maira_is_not_asked(client, tenant, maira):
-    put_on(tenant, "starter", chat=549)  # 500 a month + 10% grace = 550
-    assert client.post("/api/chat", json={"message": "Any dresses?"}).status_code == 200  # the 550th
+    put_on(tenant, "starter", chat=219)  # 200 a month + 10% grace = 220
+    assert client.post("/api/chat", json={"message": "Any dresses?"}).status_code == 200  # the 220 th
 
     response = client.post("/api/chat", json={"message": "And tops?"})
     assert response.status_code == 429 and "Help page" in response.get_json()["error"]
@@ -36,11 +36,9 @@ def test_a_question_maira_fails_to_answer_is_not_counted(client, tenant, maira):
     assert plans.used(tenant, "chat") == 0
 
 
-def test_starter_has_no_voice_and_chorus_is_not_paid_to_listen(client, tenant, chorus):
+def test_starter_has_voice_but_no_previews(client, tenant):
     put_on(tenant, "starter")
-    assert client.get("/api/shop").get_json()["features"] == {"voice": False, "previews": True}
-    response = client.post("/api/voice", data={"audio": (io.BytesIO(b"RIFF"), "q.wav", "audio/wav")})
-    assert response.status_code == 400 and "type your question" in response.get_json()["error"]
+    assert client.get("/api/shop").get_json()["features"] == {"voice": True, "previews": False}
 
 
 def test_previews_are_hidden_when_the_plan_has_none_left(client, tenant):
@@ -62,10 +60,10 @@ def test_a_catalogue_bigger_than_the_plan_is_refused(owner_client, tenant):
 
 
 def test_the_owner_is_warned_from_80_percent(owner_client, tenant):
-    put_on(tenant, "starter", chat=400)
-    meters = owner_client.get("/api/owner/usage").get_json()["meters"]
-    assert meters == [{"kind": "chat", "used": 400, "limit": 500, "warn": True, "over": False},
-                      {"kind": "preview", "used": 0, "limit": 50, "warn": False, "over": False}]
+        put_on(tenant, "starter", chat=160)  # 80% of 200
+        meters = owner_client.get("/api/owner/usage").get_json()["meters"]
+        assert meters == [{"kind": "chat", "used": 160, "limit": 200, "warn": True, "over": False}]  # Starter has no previews, so no preview meter
+
 
 
 def test_a_shop_owner_can_request_a_demo_and_stylemate_lists_it(app, client):
