@@ -41,7 +41,7 @@ PLANS = {
              pitch="For a shop starting out: answers customers day and night."),
         Plan("growth", "Growth", 6000, chat_questions=2000, voice=True, previews=200, products=200,
              pitch="For a busy page: voice questions and picture previews."),
-        Plan("pro", "Pro", 9000, chat_questions=6000, voice=True, previews=400, products=0,
+        Plan("pro", "Pro", 11000, chat_questions=6000, voice=True, previews=400, products=0,
              pitch="For a large catalogue with many customers."),
     ]
 }
