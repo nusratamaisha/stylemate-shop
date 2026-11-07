@@ -125,7 +125,7 @@ def sync_help() -> None:
 @click.command("set-plan")
 @click.argument("plan")
 def set_plan(plan: str) -> None:
-    """Put the shop on a plan (starter, growth or pro), e.g. after its monthly bKash payment."""
+    """Put the shop on a plan (growth or pro), e.g. after its monthly bKash payment."""
     tenant = db.session.scalar(db.select(Tenant).where(Tenant.slug == current_app.config["SHOP_SLUG"]))
     if tenant is None:
         raise click.ClickException("The shop isn't set up yet. Run: uv run flask seed")

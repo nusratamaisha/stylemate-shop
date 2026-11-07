@@ -393,10 +393,13 @@ h2 {
 }
 .plans {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  /* Two plans (Growth, Pro): fixed-width cards centred, so they don't stretch across the whole page */
+  grid-template-columns: repeat(2, minmax(0, 380px));
+  justify-content: center;
   gap: 20px;
   align-items: stretch;
 }
+
 .plan {
   position: relative;
   display: flex;

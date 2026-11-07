@@ -14,16 +14,20 @@ def put_on(tenant: Tenant, plan: str, **used):
     db.session.commit()
 
 
-def test_the_public_page_gets_the_three_plans_from_one_place(client):
+GROWTH = plans.PLANS["growth"]  # DRY: the tests read the plan's own numbers, so a new price or limit doesn't break them
+
+
+def test_the_public_page_gets_the_plans_from_one_place(client):
     data = client.get("/api/plans").get_json()
-    assert [plan["key"] for plan in data["plans"]] == ["starter", "growth", "pro"]
-    assert data["plans"][0]["chat_questions"] == plans.PLANS["starter"].chat_questions
+    assert [plan["key"] for plan in data["plans"]] == ["growth", "pro"]
+    assert data["plans"][0]["chat_questions"] == GROWTH.chat_questions
     assert data["prices_are_examples"] is True  # until Maisha has Gigalogy's prices
 
 
 def test_chat_questions_stop_after_the_grace_margin_and_maira_is_not_asked(client, tenant, maira):
-    put_on(tenant, "starter", chat=219)  # 200 a month + 10% grace = 220
-    assert client.post("/api/chat", json={"message": "Any dresses?"}).status_code == 200  # the 220 th
+    last_allowed = int(GROWTH.chat_questions * (1 + plans.GRACE))  # 2000 a month + 10% grace = 2200
+    put_on(tenant, "growth", chat=last_allowed - 1)
+    assert client.post("/api/chat", json={"message": "Any dresses?"}).status_code == 200  # the last one allowed
 
     response = client.post("/api/chat", json={"message": "And tops?"})
     assert response.status_code == 429 and "Help page" in response.get_json()["error"]
@@ -36,9 +40,9 @@ def test_a_question_maira_fails_to_answer_is_not_counted(client, tenant, maira):
     assert plans.used(tenant, "chat") == 0
 
 
-def test_starter_has_voice_but_no_previews(client, tenant):
-    put_on(tenant, "starter")
-    assert client.get("/api/shop").get_json()["features"] == {"voice": True, "previews": False}
+def test_growth_has_voice_and_previews(client, tenant):
+    put_on(tenant, "growth")
+    assert client.get("/api/shop").get_json()["features"] == {"voice": True, "previews": True}
 
 
 def test_previews_are_hidden_when_the_plan_has_none_left(client, tenant):
@@ -50,20 +54,20 @@ def test_previews_are_hidden_when_the_plan_has_none_left(client, tenant):
 
 
 def test_a_catalogue_bigger_than_the_plan_is_refused(owner_client, tenant):
-    put_on(tenant, "starter")  # 50 products; the test shop has 10
+    put_on(tenant, "growth")  # the test shop already has 10 products
     header = "product_id,name,image,category,occasion,sizes,colours,fabric,length_inches,sleeve,price_bdt,stock,customizable,description\n"
     rows = "".join(f"SR-{100 + number},Piece {number},,Dress,Everyday,M,Black,Cotton,,,1000,5,no,A piece\n"
-                   for number in range(41))
+                   for number in range(GROWTH.products - 9))  # 10 + 191 = one more than Growth's 200
     response = owner_client.post("/api/owner/products/upload",
                                  data={"file": (io.BytesIO((header + rows).encode()), "products.csv")})
-    assert response.status_code == 400 and "up to 50 products" in response.get_json()["error"]
+    assert response.status_code == 400 and f"up to {GROWTH.products} products" in response.get_json()["error"]
 
 
 def test_the_owner_is_warned_from_80_percent(owner_client, tenant):
-        put_on(tenant, "starter", chat=160)  # 80% of 200
-        meters = owner_client.get("/api/owner/usage").get_json()["meters"]
-        assert meters == [{"kind": "chat", "used": 160, "limit": 200, "warn": True, "over": False}]  # Starter has no previews, so no preview meter
-
+    warn_from = int(GROWTH.chat_questions * plans.WARN_AT)  # 80% of 2000 = 1600
+    put_on(tenant, "growth", chat=warn_from)
+    meters = owner_client.get("/api/owner/usage").get_json()["meters"]
+    assert meters[0] == {"kind": "chat", "used": warn_from, "limit": GROWTH.chat_questions, "warn": True, "over": False}
 
 
 def test_a_shop_owner_can_request_a_demo_and_stylemate_lists_it(app, client):

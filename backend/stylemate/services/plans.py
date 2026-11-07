@@ -37,8 +37,6 @@ class Plan:
 
 PLANS = {
     plan.key: plan for plan in [
-        Plan("starter", "Starter", 1000, chat_questions=200, voice=True, previews=0, products=50,
-             pitch="For a shop starting out: answers customers day and night."),
         Plan("growth", "Growth", 6000, chat_questions=2000, voice=True, previews=200, products=200,
              pitch="For a busy page: voice questions and picture previews."),
         Plan("pro", "Pro", 11000, chat_questions=6000, voice=True, previews=400, products=0,
