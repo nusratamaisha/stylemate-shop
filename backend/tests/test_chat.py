@@ -220,3 +220,17 @@ def test_a_size_given_after_the_stylist_asks_for_one_starts_the_order(client, ma
 def test_a_size_alone_starts_nothing_in_a_new_conversation(client, maira):
     maira.answer = "Which product do you mean?"
     assert client.post("/api/chat", json={"message": "M"}).get_json()["order"] is None
+
+
+def test_chat_questions_are_limited_per_visitor_per_day(app, client, chorus, maira):
+    app.config["CHAT_QUESTIONS_PER_DAY"] = 2
+    assert client.post("/api/chat", json={"message": "Something for a wedding?"}).status_code == 200
+    # A spoken question counts towards the same number (one helper for /chat and /voice)
+    spoken = client.post("/api/voice", data={"audio": (io.BytesIO(b"RIFF fake wav"), "q.wav", "audio/wav")},
+                         content_type="multipart/form-data")
+    assert spoken.status_code == 200
+
+    third = client.post("/api/chat", json={"message": "And in black?"})
+    assert third.status_code == 429
+    assert "tomorrow" in third.get_json()["error"]
+    assert len(maira.asked) == 2  # the third question was never sent to Maira, so it cost nothing

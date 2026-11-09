@@ -109,11 +109,21 @@ def price_quote():
     return jsonify(pricing.quote_for(tenant, product, body.get("option_ids") or [], body.get("measurements")).to_dict())
 
 
+def _use_daily_chat_limit(tenant) -> None:
+    """One visitor's questions in 24 hours, typed or spoken (services/limits.py).
+    DRY: /chat and /voice share this, so both count towards the same number."""
+    limits.use(tenant, "chat", sender_key(), current_app.config["CHAT_QUESTIONS_PER_DAY"],
+               "You’ve asked quite a few questions today! Please try again tomorrow, "
+               "or message the shop from the Help page.")
+
+
 @bp.post("/chat")
 def chat():
     body = json_body()
+    tenant = current_tenant()
+    _use_daily_chat_limit(tenant)  # before Maira is paid to answer
     reply = services().chat.reply(
-        current_tenant(),
+        tenant,
         visitor_id=_visitor_id(body.get("visitor_id")),
         question=str(body.get("message") or ""),
         session_id=body.get("session_id") or None,
@@ -132,7 +142,7 @@ def voice():
     if not plans.plan_of(tenant).voice:
         raise UserInputError("Voice questions aren't available in this shop. Please type your question.")
     plans.require(tenant, "chat", OVER_PLAN)
-
+    _use_daily_chat_limit(tenant)  # before Chorus is paid to listen
     transcript = services().chorus.transcribe(audio.read(), filename=audio.filename or "question.wav",
                                               mimetype=audio.mimetype or "audio/wav")
     if not transcript:
