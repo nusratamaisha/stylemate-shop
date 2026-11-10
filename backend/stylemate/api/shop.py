@@ -6,7 +6,7 @@ from ..clients import ReferenceImage
 from ..errors import UserInputError
 from ..services import accounts, catalog, demo_requests, help, limits, orders, payments, plans, pricing, sizes, uploads
 from ..services.chat import OVER_PLAN
-from .helpers import current_customer, current_tenant, error, json_body, sender_key, services
+from .helpers import current_customer, current_tenant, error, json_body, sender_key, services, customer_required
 
 bp = Blueprint("shop", __name__, url_prefix="/api")
 
@@ -46,6 +46,7 @@ def product_detail(code: str):
 
 
 @bp.post("/products/<code>/preview")
+@customer_required
 def product_preview(code: str):
     """A generated picture of the dress with the chosen changes, optionally on the customer."""
     tenant = current_tenant()
@@ -118,6 +119,7 @@ def _use_daily_chat_limit(tenant) -> None:
 
 
 @bp.post("/chat")
+@customer_required
 def chat():
     body = json_body()
     tenant = current_tenant()
@@ -132,6 +134,7 @@ def chat():
 
 
 @bp.post("/voice")
+@customer_required
 def voice():
     """Audio in, transcript plus the assistant's answer out."""
     audio = request.files.get("audio")
@@ -174,6 +177,7 @@ def upload_reference_picture():
 
 
 @bp.post("/previews/keep")
+@customer_required
 def keep_preview():
     """A "See it first" picture the customer wants the tailor to see. Returns the name to send with the order."""
     limits.use(current_tenant(), "reference_picture", sender_key(), current_app.config["REFERENCE_PICTURES_PER_DAY"],

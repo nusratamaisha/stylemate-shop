@@ -6,7 +6,7 @@ from stylemate.extensions import db
 from stylemate.models import Order
 from stylemate.services.insights import business_insights, missing_topics, topic_of
 
-from .conftest import option_id
+from .conftest import option_id, log_in_customer
 
 CUSTOMER = {"name": "Nusrat", "phone": "01700000000", "address": "Dhaka", "delivery_area": "inside_dhaka"}
 NOW = datetime(2026, 10, 20, 12, tzinfo=timezone.utc)
@@ -88,11 +88,12 @@ def test_this_month_is_compared_with_last_month(owner_client, tenant):
     assert owner_client.get("/api/owner/business").status_code == 200
 
 
-def test_unanswered_questions_are_grouped_into_topics(owner_client, maira):
+def test_unanswered_questions_are_grouped_into_topics(app, owner_client, maira):
+    shopper = log_in_customer(app.test_client())  # its own browser: an owner login is not a customer login
     for question, score in [("Do you have XXL?", 23.0), ("is there 2xl", 20.0), ("Plus size dresses?", 18.0),
                             ("Do you sell shoes", 21.0), ("Do you have a pink dress?", 42.0)]:
         maira.top_score = score  # below the threshold: not answered from the catalogue
-        owner_client.post("/api/chat", json={"message": question})
+        shopper.post("/api/chat", json={"message": question})
 
     chat = owner_client.get("/api/owner/business").get_json()["chat"]
     assert chat["total_questions"] == 5 and chat["answer_rate"] == 20

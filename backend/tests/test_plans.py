@@ -24,19 +24,19 @@ def test_the_public_page_gets_the_plans_from_one_place(client):
     assert data["prices_are_examples"] is True  # until Maisha has Gigalogy's prices
 
 
-def test_chat_questions_stop_after_the_grace_margin_and_maira_is_not_asked(client, tenant, maira):
+def test_chat_questions_stop_after_the_grace_margin_and_maira_is_not_asked(customer_client, tenant, maira):
     last_allowed = int(GROWTH.chat_questions * (1 + plans.GRACE))  # 2000 a month + 10% grace = 2200
     put_on(tenant, "growth", chat=last_allowed - 1)
-    assert client.post("/api/chat", json={"message": "Any dresses?"}).status_code == 200  # the last one allowed
+    assert customer_client.post("/api/chat", json={"message": "Any dresses?"}).status_code == 200  # the last one allowed
 
-    response = client.post("/api/chat", json={"message": "And tops?"})
+    response = customer_client.post("/api/chat", json={"message": "And tops?"})
     assert response.status_code == 429 and "Help page" in response.get_json()["error"]
     assert len(maira.asked) == 1
 
 
-def test_a_question_maira_fails_to_answer_is_not_counted(client, tenant, maira):
+def test_a_question_maira_fails_to_answer_is_not_counted(customer_client, tenant, maira):
     maira.fail = True
-    client.post("/api/chat", json={"message": "Any dresses?"})
+    customer_client.post("/api/chat", json={"message": "Any dresses?"})
     assert plans.used(tenant, "chat") == 0
 
 

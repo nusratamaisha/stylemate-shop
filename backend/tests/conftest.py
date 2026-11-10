@@ -14,6 +14,9 @@ PRODUCTS_CSV = Path(__file__).parent / "data" / "products.csv"  # a fixed catalo
 OWNER_EMAIL = "owner@example.com"
 OWNER_PASSWORD = "secret-pass"
 
+CUSTOMER_SIGNUP = {"name": "Test Customer", "email": "customer@example.com",
+                   "password": "long-enough", "phone": "01711000000"}
+
 
 @pytest.fixture
 def maira():
@@ -64,11 +67,31 @@ def tenant(app):
     return db.session.scalar(db.select(Tenant))
 
 
-@pytest.fixture
-def owner_client(client):
+def log_in_owner(client):
+    """Log the shop owner in to this test browser. Owner login clears the session (api/owner.py),
+    so a test that also needs a customer gives the owner their own browser (app.test_client())."""
     response = client.post("/api/owner/login", json={"email": OWNER_EMAIL, "password": OWNER_PASSWORD})
     assert response.status_code == 200
     return client
+
+
+@pytest.fixture
+def owner_client(client):
+    return log_in_owner(client)
+
+
+
+def log_in_customer(client):
+    """Sign a customer up in this test browser. The AI features need one (api/shop.py, customer_required)."""
+    response = client.post("/api/account/register", json=CUSTOMER_SIGNUP)
+    assert response.status_code == 201
+    return client
+
+
+@pytest.fixture
+def customer_client(client):
+    return log_in_customer(client)
+
 
 
 def option_id(group: str, label: str) -> int:

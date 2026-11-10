@@ -1,11 +1,34 @@
 """The assistant: text chat, voice, product cards and the unanswered-question flag."""
 #(9 tests)
 import io
-
+import pytest
 from stylemate.extensions import db
 from stylemate.models import ChatTurn, Product
 from stylemate.services.chat import is_answered, mentioned_products
 from stylemate.services.catalog import list_products
+from .conftest import OWNER_EMAIL, OWNER_PASSWORD, log_in_owner
+
+
+def test_guests_must_log_in_to_ask_the_stylist(app, maira, chorus):
+    guest = app.test_client()  # a fresh browser, not the logged-in one
+    assert guest.post("/api/chat", json={"message": "Any dresses?"}).status_code == 401
+    spoken = guest.post("/api/voice", data={"audio": (io.BytesIO(b"RIFF fake wav"), "q.wav", "audio/wav")},
+                        content_type="multipart/form-data")
+    assert spoken.status_code == 401
+    assert maira.asked == [] and chorus.received == []  # nothing paid was called
+
+
+def test_an_owner_login_is_not_a_customer_login(app, maira):
+    owner = app.test_client()
+    owner.post("/api/owner/login", json={"email": OWNER_EMAIL, "password": OWNER_PASSWORD})
+    assert owner.post("/api/chat", json={"message": "Any dresses?"}).status_code == 401
+
+
+
+@pytest.fixture(autouse=True)
+def _logged_in(customer_client):
+    """Every test here is a logged-in customer, because the AI features need an account.
+    Guests are tested on their own, with a fresh browser (app.test_client())."""
 
 
 def test_chat_returns_answer_and_mentioned_products(client, maira):
@@ -234,3 +257,8 @@ def test_chat_questions_are_limited_per_visitor_per_day(app, client, chorus, mai
     assert third.status_code == 429
     assert "tomorrow" in third.get_json()["error"]
     assert len(maira.asked) == 2  # the third question was never sent to Maira, so it cost nothing
+
+
+def test_an_owner_login_is_not_a_customer_login(app, maira):
+    owner = log_in_owner(app.test_client())
+    assert owner.post("/api/chat", json={"message": "Any dresses?"}).status_code == 401

@@ -1,13 +1,19 @@
 """Image preview: the prompt, the reference images, and what is refused before Maira is called."""
 
 import io
-
+import pytest
 from stylemate.extensions import db
 from stylemate.models import Tenant
 
-from .conftest import option_id
+from .conftest import option_id, log_in_owner
 
 PNG = b"\x89PNG fake picture bytes"
+
+
+@pytest.fixture(autouse=True)
+def _logged_in(customer_client):
+    """Every test here is a logged-in customer, because the AI features need an account.
+    Guests are tested on their own, with a fresh browser (app.test_client())."""
 
 
 def post_preview(client, code="SR-002", **form):
@@ -144,7 +150,7 @@ def test_previews_are_limited_per_visitor_per_day(app, client, maira):
     assert len(maira.image_requests) == 1  # the second picture was never paid for
 
 
-def test_a_preview_can_be_sent_to_the_tailor_as_a_reference_picture(client, owner_client, maira):
+def test_a_preview_can_be_sent_to_the_tailor_as_a_reference_picture(app, client, maira):
     token = post_preview(client, wish="a gold border at the hem").get_json()["keep_token"]
 
     kept = client.post("/api/previews/keep", json={"token": token})
@@ -157,8 +163,10 @@ def test_a_preview_can_be_sent_to_the_tailor_as_a_reference_picture(client, owne
         "items": [{"product_code": "SR-002", "colour": "Maroon", "measurements": {"bust": 38},
                    "option_ids": [option_id("Fit", "Made to your measurements")], "reference_image": name}]})
     item = placed.get_json()["items"][0]
-    picture = owner_client.get(f"/api/owner/custom-orders/{item['id']}/reference-picture")
+    owner = log_in_owner(app.test_client())  # the owner's own browser, so the customer stays logged in
+    picture = owner.get(f"/api/owner/custom-orders/{item['id']}/reference-picture")
     assert picture.data == b"\x89PNG drawn picture"
+
 
 
 def test_only_a_picture_maira_drew_can_be_kept(client, maira):
@@ -166,3 +174,10 @@ def test_only_a_picture_maira_drew_can_be_kept(client, maira):
     response = client.post("/api/previews/keep", json={"token": "https://evil.test/a.png"})
     assert response.status_code == 400
     assert maira.downloaded == []
+
+
+def test_guests_must_log_in_to_see_a_preview(app, maira):
+    guest = app.test_client()
+    assert post_preview(guest, wish="longer sleeves").status_code == 401
+    assert guest.post("/api/previews/keep", json={"token": "x"}).status_code == 401
+    assert maira.image_requests == []
