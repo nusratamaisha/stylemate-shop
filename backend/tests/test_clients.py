@@ -128,6 +128,21 @@ def test_transcribe_gives_up_after_max_wait():
         chorus_client(http, clock_values=[0, 25]).transcribe(b"...")
 
 
+def test_transcribe_waits_for_a_slow_chorus():
+    """Bug fix: since Chorus v1.10.0 a transcription takes about 30 s, and the old 20 s limit gave a 502."""
+    http = FakeHttp(
+        FakeResponse(200, {"task_id": "task-1", "status": "queued"}),
+        FakeResponse(200, {"status": "queued"}),
+        FakeResponse(200, {"status": "completed", "results": {"transcription": {"text": "Red dress"}}}),
+    )
+    ticks = iter([0, 36])  # the task is still queued 36 s after the upload
+    # No max_wait passed: this checks the real default, not the 20 s the other tests use
+    client = ChorusClient("https://chorus.test", "p", "a", http=http,
+                          sleep=lambda seconds: None, clock=lambda: next(ticks))
+
+    assert client.transcribe(b"...") == "Red dress"
+
+
 def test_transcribe_reports_failed_tasks():
     http = FakeHttp(
         FakeResponse(200, {"task_id": "task-1", "status": "queued"}),

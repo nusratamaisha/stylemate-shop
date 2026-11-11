@@ -14,7 +14,9 @@ from .base import GigalogyClient
 class ChorusClient(GigalogyClient):
     service_name = "Chorus"
 
-    def __init__(self, *args, poll_interval: float = 0.3, max_wait: float = 20.0,
+    # Since Chorus v1.10.0 (Groq Whisper) a transcription takes about 27-33 s (measured 11 Nov 2026),
+    # mostly waiting in "queued". 45 s leaves room; checking once a second is plenty at that speed.
+    def __init__(self, *args, poll_interval: float = 1.0, max_wait: float = 45.0,
                  sleep: Callable[[float], None] = time.sleep,
                  clock: Callable[[], float] = time.monotonic, **kwargs):
         super().__init__(*args, **kwargs)
@@ -43,5 +45,12 @@ class ChorusClient(GigalogyClient):
             if status == "failed":
                 raise ServiceUnavailableError("Chorus could not transcribe the recording")
             if self._clock() >= deadline:
-                raise ServiceUnavailableError("Chorus took too long to transcribe the recording")
+                # Name the last status so the log shows where the task got stuck:
+                # "queued"/"processing" = Chorus is slow; anything else = a status we don't know yet
+                raise ServiceUnavailableError(
+                    f"Chorus took too long to transcribe the recording "
+                    f"(task {task_id}, last status: {status!r})"
+                )
+
+
             self._sleep(self._poll_interval)
